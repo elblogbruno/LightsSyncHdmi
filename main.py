@@ -26,6 +26,11 @@ prev_dominant_color = np.array([255, 255, 255])  # Initial color white
 light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.LedComedorSamsung")
 media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.samsung_qn85ca_75_2")
 
+# Process frames
+last_update_time = time.time()
+update_interval = 0  # Update LEDs every 0.5 seconds
+frame_counter = 0  # For saving a frame once
+
 # Initialize Home Assistant API client
 try:
     with Client(
@@ -44,7 +49,7 @@ try:
             
             try:
                 tv = client.get_entity(entity_id=media_player_entity_id)  # Replace with your TV entity ID
-                print(tv.state.state)
+                print(tv.state.state  + " " +  time.time())
                 return tv.state.state == "on"
             except Exception as e:
                 print(f"Error checking TV state: {e}")
@@ -98,10 +103,7 @@ try:
         except Exception as e:
             print(f"Error controlling lights: {e}")
 
-        # Process frames
-        last_update_time = time.time()
-        update_interval = 0.1  # Update LEDs every 0.5 seconds
-        frame_counter = 0  # For saving a frame once
+        time.sleep(10)  # Wait for the light to turn off and some time for the TV to turn on
 
         while True:
             # Check if the TV is off
@@ -123,7 +125,7 @@ try:
             small_frame = frame  # No need to downscale for better color capture
 
             # Apply gamma correction to adjust for non-linearities in the display
-            gamma = 2.2
+            gamma = 1.0  # Adjust gamma to 1.0 for more accurate color representation
             inv_gamma = 1.0 / gamma
             table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
             small_frame = cv2.LUT(small_frame, table)
@@ -158,7 +160,7 @@ try:
 
                 # Get the most dominant color using k-means
                 pixels = np.float32(region_rgb.reshape(-1, 3))
-                n_colors = 5  # Increase clusters for better accuracy
+                n_colors = 10  # Increase clusters for better accuracy
                 _, labels, palette = cv2.kmeans(pixels, n_colors, None,
                                                 (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, .1), 10,
                                                 cv2.KMEANS_RANDOM_CENTERS)
@@ -179,9 +181,9 @@ try:
 
             # Ensure the color has enough brightness and saturation
             dominant_hsv = cv2.cvtColor(np.uint8([[average_color]]), cv2.COLOR_RGB2HSV)[0][0]
-            dominant_hsv[1] = max(150, dominant_hsv[1])  # Ensure higher minimum saturation
-            dominant_hsv[2] = max(150, dominant_hsv[2])  # Ensure higher minimum brightness
-
+            dominant_hsv[1] = max(100, dominant_hsv[1])  # Adjust minimum saturation
+            dominant_hsv[2] = max(100, dominant_hsv[2])  # Adjust minimum brightness
+            
             # Convert back to RGB
             final_color = cv2.cvtColor(np.uint8([[dominant_hsv]]), cv2.COLOR_HSV2RGB)[0][0]
 
