@@ -28,7 +28,7 @@ media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.
 
 # Process frames
 last_update_time = time.time()
-update_interval = 0  # Update LEDs every 0.5 seconds
+update_interval = 0.5  # Update LEDs every 0.5 seconds
 frame_counter = 0  # For saving a frame once
 
 # Initialize Home Assistant API client
@@ -104,6 +104,8 @@ try:
             print(f"Error controlling lights: {e}")
 
         time.sleep(10)  # Wait for the light to turn off and some time for the TV to turn on
+ 
+        skipped_frames = 0
 
         while True:
             # Check if the TV is off
@@ -113,6 +115,13 @@ try:
                 time.sleep(1)  # Wait 5 seconds before checking again
                 continue  # Skip to the next iteration if the TV is off
  
+            # skip some frames until we have a stable image
+            if skipped_frames < 10:
+                print("Skipping frames...")
+                cap.read()
+                skipped_frames += 1
+                continue # Skip to the next iteration if the TV is off
+
             # Read the frame
             ret, frame = cap.read()
 
@@ -129,6 +138,10 @@ try:
             inv_gamma = 1.0 / gamma
             table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
             small_frame = cv2.LUT(small_frame, table)
+
+            
+            # reduce processing by reducing frame pixel count, since we only need the dominant color
+            small_frame = cv2.resize(small_frame, (160, 120))
 
             # Define regions of interest (ROIs)
             height, width, _ = small_frame.shape
