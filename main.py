@@ -37,15 +37,15 @@ last_update_time = time.time()
 update_interval = 0.5  # Update LEDs every 0.5 seconds
 frame_counter = 0  # For saving a frame once
 
-def closest_color(requested_color):
-    min_colors = {}
-    for key, name in webcolors.CSS3_HEX_TO_NAMES.items():
-        r_c, g_c, b_c = webcolors.hex_to_rgb(key)
-        rd = (r_c - requested_color[0]) ** 2
-        gd = (g_c - requested_color[1]) ** 2
-        bd = (b_c - requested_color[2]) ** 2
-        min_colors[(rd + gd + bd)] = name
-    return min_colors[min(min_colors.keys())]
+def closest_colour(requested_colour):
+    min_colours = {}
+    for name in webcolors.names("css3"):
+        r_c, g_c, b_c = webcolors.name_to_rgb(name)
+        rd = (r_c - requested_colour[0]) ** 2
+        gd = (g_c - requested_colour[1]) ** 2
+        bd = (b_c - requested_colour[2]) ** 2
+        min_colours[(rd + gd + bd)] = name
+    return min_colours[min(min_colours.keys())]
 
 def get_color_name(rgb_tuple):
     try:
@@ -55,7 +55,7 @@ def get_color_name(rgb_tuple):
         return webcolors.hex_to_name(hex_value)
     except ValueError:
         # If exact match not found, find the closest color
-        return closest_color(rgb_tuple)
+        return closest_colour(rgb_tuple)
 
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
@@ -235,7 +235,7 @@ try:
         if time.time() - last_update_time > update_interval:
             try:
                 print("Updating LED color to:", final_color)
-                unique_rgb = np.unique(final_color, axis=0)
+                unique_rgb = (final_color[0], final_color[1], final_color[2])
                 color_name = get_color_name(unique_rgb)
                 print(f"The color name for RGB {unique_rgb} is {color_name}.")
                 turn_on_set_light(final_color.tolist())
