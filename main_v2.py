@@ -145,25 +145,80 @@ try:
         # small_frame = cv2.resize(frame, (320, 240))
         small_frame = frame  # No need to downscale for better color capture
 
-         
+        # Apply gamma correction to adjust for non-linearities in the display
+        gamma = 1.0  # Adjust gamma to 1.0 for more accurate color representation
+        inv_gamma = 1.0 / gamma
+        table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+        small_frame = cv2.LUT(small_frame, table)
+
+        
+        # reduce processing by reducing frame pixel count, since we only need the dominant color
+        small_frame = cv2.resize(small_frame, (160, 120))
+
+        # Define regions of interest (ROIs)
+        height, width, _ = small_frame.shape
+        regions = {
+            'top_left': small_frame[:height // 2, :width // 2],
+            'top_right': small_frame[:height // 2, width // 2:],
+            'bottom_left': small_frame[height // 2:, :width // 2],
+            'bottom_right': small_frame[height // 2:, width // 2:],
+            'center': small_frame[height // 4: 3 * height // 4, width // 4: 3 * width // 4]
+        }
+
         # Save a frame for testing
         if frame_counter < 5:
             # Save the first frame as 'captured_frame.jpg'
             cv2.imwrite('captured_frame_' + str(frame_counter) + '.jpg', frame)
             print("Frame saved as 'captured_frame.jpg'")
- 
+
+            for region_name, region in regions.items():
+                cv2.imwrite(f'captured_{region_name}_{frame_counter}.jpg', region)
+                print(f"Region '{region_name}' saved as 'captured_{region_name}_{frame_counter}.jpg'")
+
             frame_counter += 1
 
         dominant_colors = []
 
-        #
-        channels = cv2.mean(frame)
-        final_color = np.array([channels[2], channels[1], channels[0]])
+        # Process each region to find dominant color
+        for region_name, region in regions.items():
+            region_rgb = cv2.cvtColor(region, cv2.COLOR_BGR2RGB)
+
+            # Get the most dominant color using k-means
+            pixels = np.float32(region_rgb.reshape(-1, 3))
+            n_colors = 10  # Increase clusters for better accuracy
+            _, labels, palette = cv2.kmeans(pixels, n_colors, None,
+                                            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, .1), 10,
+                                            cv2.KMEANS_RANDOM_CENTERS)
+            _, counts = np.unique(labels, return_counts=True)
+            dominant_color = palette[np.argmax(counts)]
+
+            dominant_colors.append(dominant_color)
+
+        # Average the dominant colors from all regions
+        average_color = np.mean(dominant_colors, axis=0)
+
+        # Smooth the color transition by blending previous and current dominant colors
+        average_color = smoothing_factor * average_color + (1 - smoothing_factor) * prev_dominant_color
+        average_color = average_color.astype(int)  # Convert to integer
+
+        # Update previous color for the next iteration
+        prev_dominant_color = average_color
+
+        # Ensure the color has enough brightness and saturation
+        dominant_hsv = cv2.cvtColor(np.uint8([[average_color]]), cv2.COLOR_RGB2HSV)[0][0]
+        dominant_hsv[1] = max(100, dominant_hsv[1])  # Adjust minimum saturation
+        dominant_hsv[2] = max(100, dominant_hsv[2])  # Adjust minimum brightness
+        
+        # Convert back to RGB
+        final_color = cv2.cvtColor(np.uint8([[dominant_hsv]]), cv2.COLOR_HSV2RGB)[0][0]
 
         # Update LED color at the defined interval
         if time.time() - last_update_time > update_interval:
             try:
-                print("Updating LED color to:", final_color) 
+                print("Updating LED color to:", final_color)
+                unique_rgb = (final_color[0], final_color[1], final_color[2])
+                color_name = get_color_name(unique_rgb)
+                print(f"The color name for RGB {unique_rgb} is {color_name}.")
                 turn_on_set_light(final_color.tolist())
             except Exception as e:
                 print(f"Error updating LED color: {e}")
