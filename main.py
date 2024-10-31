@@ -4,6 +4,7 @@ import os
 import dotenv
 import time
 from homeassistant_api import Client
+from sklearn.cluster import KMeans
 import webcolors
 
 from api import CustomAPIClient
@@ -36,28 +37,18 @@ media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.
 last_update_time = time.time()
 update_interval = 0.5  # Update LEDs every 0.5 seconds
 frame_counter = 0  # For saving a frame once
- 
-
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
 
 # Initialize Home Assistant API client
 try:
-    # with Client(
-    #     os.environ['HASSIO_HOST'],
-    #     os.environ['HASSIO_TOKEN'],
-    # ) as client:
-
-    #     light = client.get_domain("light") 
-
-    # Function to check if TV is on
     def is_tv_on(count=0):
         if count >= 3:
             print("Failed to check TV state after 3 attempts. Exiting the script...")
             return False
         
         try:
-            tv = api_client.get_entity(entity_id=media_player_entity_id)  # Replace with your TV entity ID
+            tv = api_client.get_entity(entity_id=media_player_entity_id)
             if not tv:
                 return False
             
@@ -65,7 +56,6 @@ try:
             return tv["state"] == "on"
         except Exception as e:
             print(f"Error checking TV state: {e}")
-            # try again
             return is_tv_on(count+1)
         
     def turn_on_light(count=0):
@@ -77,7 +67,6 @@ try:
             api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgbww_color=rgbww_color)
         except Exception as e:
             print(f"Error controlling lights: {e}")
-            # try again
             turn_on_light(count+1)
 
     def turn_off_light(count=0):
@@ -89,7 +78,6 @@ try:
             api_client.turn_on(entity_id=light_entity_id, brightness_pct=0, rgbww_color=rgbww_color)
         except Exception as e:
             print(f"Error controlling lights: {e}")
-            # try again
             turn_off_light(count+1)
 
     def turn_on_set_light(target_color, count=0):
@@ -102,8 +90,12 @@ try:
             api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgbww_color=rgbww_color)
         except Exception as e:
             print(f"Error controlling lights: {e}")
-            # try again
             turn_on_set_light(target_color, count+1)
+
+    # Suavizado de color
+    def smooth_color(prev_color, new_color, factor=0.1):
+        return prev_color * (1 - factor) + new_color * factor
+
 
     # Set initial LED color to red
     try:
@@ -142,29 +134,29 @@ try:
             break
 
         # Downscale frame for faster processing
-        # small_frame = cv2.resize(frame, (320, 240))
-        small_frame = frame  # No need to downscale for better color capture
+        small_frame = cv2.resize(frame, (320, 240))
 
-         
         # Save a frame for testing
         if frame_counter < 5:
-            # Save the first frame as 'captured_frame.jpg'
             cv2.imwrite('captured_frame_' + str(frame_counter) + '.jpg', frame)
             print("Frame saved as 'captured_frame.jpg'")
- 
             frame_counter += 1
 
-        dominant_colors = []
+        # Reshape the image to be a list of pixels
+        pixels = small_frame.reshape((-1, 3))
 
-        #
-        channels = cv2.mean(frame)
-        final_color = np.array([channels[2], channels[1], channels[0]])
+        # Perform k-means clustering to find the dominant color
+        kmeans = KMeans(n_clusters=1)
+        kmeans.fit(pixels)
+        dominant_color = kmeans.cluster_centers_[0]
 
-        # Update LED color at the defined interval
+        # Dentro del bucle principal
         if time.time() - last_update_time > update_interval:
             try:
-                print("Updating LED color to:", final_color) 
-                turn_on_set_light(final_color.tolist())
+                dominant_color = smooth_color(prev_dominant_color, dominant_color)
+                print("Updating LED color to:", dominant_color)
+                turn_on_set_light(dominant_color.astype(int).tolist())
+                prev_dominant_color = dominant_color
             except Exception as e:
                 print(f"Error updating LED color: {e}")
             last_update_time = time.time()
