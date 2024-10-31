@@ -87,6 +87,7 @@ try:
         
         try:
             rgbww_color = target_color + [255, 255]  # Assuming WW values are always max
+            print(f"Setting light color to: {rgbww_color} with brightness: {brightness_pct}%")
             api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgbww_color=rgbww_color)
         except Exception as e:
             print(f"Error controlling lights: {e}")
@@ -149,9 +150,12 @@ try:
         pixels = small_frame.reshape((-1, 3))
 
         # Perform k-means clustering to find the dominant color
-        kmeans = KMeans(n_clusters=1)
+        kmeans = KMeans(n_clusters=4)
         kmeans.fit(pixels)
         dominant_color = kmeans.cluster_centers_[0]
+
+        # Print the detected dominant color for debugging
+        print(f"Detected dominant color: {dominant_color}")
 
         # Dentro del bucle principal
         if time.time() - last_update_time > update_interval:
