@@ -146,13 +146,22 @@ try:
             print("Frame saved as 'captured_frame.jpg'")
             frame_counter += 1
 
+        # Create a mask to focus on the central part of the frame
+        height, width, _ = small_frame.shape
+        mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
+        masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
+
         # Reshape the image to be a list of pixels
-        pixels = small_frame.reshape((-1, 3))
+        pixels = masked_frame.reshape((-1, 3))
+
+        # Remove black pixels (background)
+        pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
 
         # Perform k-means clustering to find the dominant color
-        kmeans = KMeans(n_clusters=4)
+        kmeans = KMeans(n_clusters=8)  # Increase the number of clusters
         kmeans.fit(pixels)
-        dominant_color = kmeans.cluster_centers_[0]
+        dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
 
         # Print the detected dominant color for debugging
         print(f"Detected dominant color: {dominant_color}")
