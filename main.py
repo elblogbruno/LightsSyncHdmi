@@ -91,6 +91,10 @@ def smooth_color(prev_color, new_color, factor=0.1):
 def calculate_brightness(color):
     return np.sqrt(0.299 * color[0]**2 + 0.587 * color[1]**2 + 0.114 * color[2]**2)
 
+# Create a directory to save frames
+debug_frames_dir = "debug_frames"
+os.makedirs(debug_frames_dir, exist_ok=True)
+
 try:
     print("Turning on the light...")
     turn_on_light()
@@ -103,6 +107,7 @@ except Exception as e:
 time.sleep(10)
 
 skipped_frames = 0
+frame_count = 0
 
 while True:
     if not is_tv_on():
@@ -138,6 +143,11 @@ while True:
     dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
 
     print(f"Detected dominant color: {dominant_color}")
+
+    # Save the frame for debugging
+    frame_filename = os.path.join(debug_frames_dir, f"frame_{frame_count}_color_{dominant_color.astype(int)}.png")
+    cv2.imwrite(frame_filename, frame)
+    frame_count += 1
 
     if time.time() - last_update_time > update_interval:
         try:
