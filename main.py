@@ -27,7 +27,7 @@ if not cap.isOpened():
     exit()
 
 # Parameters for smoothing
-smoothing_factor = 0.1
+smoothing_factor = 0.05  # Adjusted smoothing factor for less aggressive color transition
 prev_dominant_color = np.array([255, 255, 255])  # Initial color white
 
 light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.LedComedorSamsung")
@@ -80,22 +80,25 @@ try:
             print(f"Error controlling lights: {e}")
             turn_off_light(count+1)
 
-    def turn_on_set_light(target_color, count=0):
+    def turn_on_set_light(target_color, brightness_pct, count=0):
         if count >= 3:
             print("Failed to turn on the light after 3 attempts. Exiting the script...")
             return
         
         try:
             rgbww_color = target_color + [255, 255]  # Assuming WW values are always max
-            api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgbww_color=rgbww_color)
+            api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgbww_color=rgbww_color)
         except Exception as e:
             print(f"Error controlling lights: {e}")
-            turn_on_set_light(target_color, count+1)
+            turn_on_set_light(target_color, brightness_pct, count+1)
 
     # Suavizado de color
     def smooth_color(prev_color, new_color, factor=0.1):
         return prev_color * (1 - factor) + new_color * factor
 
+    # Calculate brightness
+    def calculate_brightness(color):
+        return np.sqrt(0.299 * color[0]**2 + 0.587 * color[1]**2 + 0.114 * color[2]**2)
 
     # Set initial LED color to red
     try:
@@ -154,8 +157,10 @@ try:
         if time.time() - last_update_time > update_interval:
             try:
                 dominant_color = smooth_color(prev_dominant_color, dominant_color)
-                print("Updating LED color to:", dominant_color)
-                turn_on_set_light(dominant_color.astype(int).tolist())
+                brightness = calculate_brightness(dominant_color)
+                brightness_pct = int((brightness / 255) * 100)
+                print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
                 prev_dominant_color = dominant_color
             except Exception as e:
                 print(f"Error updating LED color: {e}")
