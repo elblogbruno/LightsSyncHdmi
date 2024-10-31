@@ -138,11 +138,14 @@ while True:
     pixels = masked_frame.reshape((-1, 3))
     pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
 
-    kmeans = KMeans(n_clusters=4)  # Reduced number of clusters
-    kmeans.fit(pixels)
-    dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
-
-    print(f"Detected dominant color: {dominant_color}")
+    try:
+        kmeans = KMeans(n_clusters=4)  # Reduced number of clusters
+        kmeans.fit(pixels)
+        dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
+        print(f"Detected dominant color: {dominant_color}")
+    except Exception as e:
+        print(f"Error during KMeans clustering: {e}")
+        continue
 
     # Save the frame for debugging
     frame_filename = os.path.join(debug_frames_dir, f"frame_{frame_count}_color_{dominant_color.astype(int)}.png")
