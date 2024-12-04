@@ -141,15 +141,19 @@ def get_settings():
 def get_feedback():
     return jsonify({
         "current_color": prev_dominant_color.tolist(),
-        "frame_grab_success": frame_grab_success
+        "frame_grab_success": frame_grab_success,
+        "updating_colors": updating_colors,
+        "error_occurred": error_occurred
     })
 
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
 def run_video_capture():
-    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success
+    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred
     frame_grab_success = False  # Inicializar la variable
+    updating_colors = False  # Inicializar la variable
+    error_occurred = False  # Inicializar la variable
     while True:
         if not is_tv_on():
             print("Samsung TV is off. Pausing the script...")
@@ -168,8 +172,10 @@ def run_video_capture():
         if not ret:
             print("Failed to grab frame")
             frame_grab_success = False
+            error_occurred = True
         else:
             frame_grab_success = True
+            error_occurred = False
 
         small_frame = cv2.resize(frame, (160, 120))  # Further reduced frame size
 
@@ -188,6 +194,7 @@ def run_video_capture():
             print(f"Detected dominant color: {dominant_color}")
         except Exception as e:
             print(f"Error during KMeans clustering: {e}")
+            error_occurred = True
             continue
 
         if time.time() - last_update_time > update_interval:
@@ -198,8 +205,12 @@ def run_video_capture():
                 print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
                 turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
                 prev_dominant_color = dominant_color
+                updating_colors = True
+                error_occurred = False
             except Exception as e:
                 print(f"Error updating LED color: {e}")
+                updating_colors = False
+                error_occurred = True
             last_update_time = time.time()
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -210,6 +221,8 @@ def run_video_capture():
 
 if __name__ == '__main__':
     frame_grab_success = False
+    updating_colors = False
+    error_occurred = False
     flask_thread = threading.Thread(target=run_flask)
     video_thread = threading.Thread(target=run_video_capture)
     flask_thread.start()

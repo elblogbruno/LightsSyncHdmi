@@ -43,6 +43,8 @@
         <p id="feedback"></p>
         <p>Current Color: <span id="current_color"></span></p>
         <p>Frame Grab Status: <span id="frame_grab_status"></span></p>
+        <p>Updating Colors: <span id="updating_colors"></span></p>
+        <p>Error Occurred: <span id="error_occurred"></span></p>
     </div>
     <script>
         $(document).ready(function() {
@@ -141,6 +143,16 @@
                         $('#frame_grab_status').text('Success').css('color', 'green');
                     } else {
                         $('#frame_grab_status').text('Failed').css('color', 'red');
+                    }
+                    if (data.updating_colors) {
+                        $('#updating_colors').text('Yes').css('color', 'green');
+                    } else {
+                        $('#updating_colors').text('No').css('color', 'red');
+                    }
+                    if (data.error_occurred) {
+                        $('#error_occurred').text('Yes').css('color', 'red');
+                    } else {
+                        $('#error_occurred').text('No').css('color', 'green');
                     }
                 });
             }
