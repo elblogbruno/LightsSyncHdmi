@@ -16,6 +16,24 @@
         <p>Media Player Entity ID: <span id="media_player_entity_id">{{ media_player_entity_id }}</span></p>
     </div>
     <div>
+        <h2>Modify Settings</h2>
+        <label for="new_smoothing_factor">Smoothing Factor:</label>
+        <input type="number" id="new_smoothing_factor" step="0.01" min="0" max="1">
+        <button id="update_smoothing_factor">Update</button>
+        <br>
+        <label for="new_update_interval">Update Interval (seconds):</label>
+        <input type="number" id="new_update_interval" step="0.1" min="0.1">
+        <button id="update_update_interval">Update</button>
+        <br>
+        <label for="new_light_entity_id">Light Entity ID:</label>
+        <input type="text" id="new_light_entity_id">
+        <button id="update_light_entity_id">Update</button>
+        <br>
+        <label for="new_media_player_entity_id">Media Player Entity ID:</label>
+        <input type="text" id="new_media_player_entity_id">
+        <button id="update_media_player_entity_id">Update</button>
+    </div>
+    <div>
         <h2>Control Panel</h2>
         <button id="turn_on">Turn On</button>
         <button id="turn_off">Turn Off</button>
@@ -23,6 +41,8 @@
     <div>
         <h2>Real-time Feedback</h2>
         <p id="feedback"></p>
+        <p>Current Color: <span id="current_color"></span></p>
+        <p>Frame Grab Status: <span id="frame_grab_status"></span></p>
     </div>
     <script>
         $(document).ready(function() {
@@ -38,6 +58,38 @@
                 });
             });
 
+            $('#update_smoothing_factor').click(function() {
+                const newSmoothingFactor = parseFloat($('#new_smoothing_factor').val());
+                $.post('/set_smoothing_factor', { smoothing_factor: newSmoothingFactor }, function(data) {
+                    $('#smoothing_factor').text(data.smoothing_factor);
+                    $('#feedback').text('Smoothing factor updated');
+                });
+            });
+
+            $('#update_update_interval').click(function() {
+                const newUpdateInterval = parseFloat($('#new_update_interval').val());
+                $.post('/set_update_interval', { update_interval: newUpdateInterval }, function(data) {
+                    $('#update_interval').text(data.update_interval);
+                    $('#feedback').text('Update interval updated');
+                });
+            });
+
+            $('#update_light_entity_id').click(function() {
+                const newLightEntityId = $('#new_light_entity_id').val();
+                $.post('/set_entity_ids', { light_entity_id: newLightEntityId }, function(data) {
+                    $('#light_entity_id').text(data.light_entity_id);
+                    $('#feedback').text('Light entity ID updated');
+                });
+            });
+
+            $('#update_media_player_entity_id').click(function() {
+                const newMediaPlayerEntityId = $('#new_media_player_entity_id').val();
+                $.post('/set_entity_ids', { media_player_entity_id: newMediaPlayerEntityId }, function(data) {
+                    $('#media_player_entity_id').text(data.media_player_entity_id);
+                    $('#feedback').text('Media player entity ID updated');
+                });
+            });
+
             function fetchSettings() {
                 $.get('/get_settings', function(data) {
                     $('#smoothing_factor').text(data.smoothing_factor);
@@ -47,7 +99,19 @@
                 });
             }
 
+            function fetchFeedback() {
+                $.get('/get_feedback', function(data) {
+                    $('#current_color').text(data.current_color);
+                    if (data.frame_grab_success) {
+                        $('#frame_grab_status').text('Success').css('color', 'green');
+                    } else {
+                        $('#frame_grab_status').text('Failed').css('color', 'red');
+                    }
+                });
+            }
+
             setInterval(fetchSettings, 5000); // Fetch settings every 5 seconds
+            setInterval(fetchFeedback, 1000); // Fetch feedback every 1 second
         });
     </script>
 </body>

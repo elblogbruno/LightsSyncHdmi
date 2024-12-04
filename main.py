@@ -137,11 +137,18 @@ def get_settings():
         "media_player_entity_id": media_player_entity_id
     })
 
+@app.route('/get_feedback', methods=['GET'])
+def get_feedback():
+    return jsonify({
+        "current_color": prev_dominant_color.tolist(),
+        "frame_grab_success": frame_grab_success
+    })
+
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
 def run_video_capture():
-    global prev_dominant_color, last_update_time, skipped_frames
+    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success
     while True:
         if not is_tv_on():
             print("Samsung TV is off. Pausing the script...")
@@ -159,7 +166,10 @@ def run_video_capture():
 
         if not ret:
             print("Failed to grab frame")
+            frame_grab_success = False
             break
+
+        frame_grab_success = True
 
         small_frame = cv2.resize(frame, (160, 120))  # Further reduced frame size
 
@@ -199,6 +209,7 @@ def run_video_capture():
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
+    frame_grab_success = False
     flask_thread = threading.Thread(target=run_flask)
     video_thread = threading.Thread(target=run_video_capture)
     flask_thread.start()
