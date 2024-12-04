@@ -5,7 +5,7 @@ import dotenv
 import time
 import threading
 from flask import Flask, render_template, request, jsonify
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
 from api import CustomAPIClient
 
 dotenv.load_dotenv()
@@ -29,7 +29,7 @@ light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.habitacion")
 media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.samsung_qn85ca_75_2")
 
 last_update_time = time.time()
-update_interval = 0.5
+update_interval = 1.0  # Increased update interval for better performance
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
 
@@ -188,7 +188,7 @@ def run_video_capture():
         pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
 
         try:
-            kmeans = KMeans(n_clusters=8)  # Increased number of clusters
+            kmeans = MiniBatchKMeans(n_clusters=8)  # Use MiniBatchKMeans for better performance
             kmeans.fit(pixels)
             cluster_centers = kmeans.cluster_centers_
             labels = kmeans.labels_
@@ -208,7 +208,7 @@ def run_video_capture():
                     dominant_color_index = i
                     min_distance = distance
 
-            print(f"Detected dominant color: {dominant_color}")
+            # print(f"Detected dominant color: {dominant_color}")
         except Exception as e:
             print(f"Error during KMeans clustering: {e}")
             error_occurred = True
@@ -219,7 +219,7 @@ def run_video_capture():
                 dominant_color = smooth_color(prev_dominant_color, dominant_color)
                 brightness = calculate_brightness(dominant_color)
                 brightness_pct = int((brightness / 255) * 100)
-                print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                # print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
                 turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
                 prev_dominant_color = dominant_color
                 updating_colors = True
