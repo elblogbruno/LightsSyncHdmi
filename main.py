@@ -149,6 +149,7 @@ def run_flask():
 
 def run_video_capture():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success
+    frame_grab_success = False  # Inicializar la variable
     while True:
         if not is_tv_on():
             print("Samsung TV is off. Pausing the script...")
@@ -167,9 +168,8 @@ def run_video_capture():
         if not ret:
             print("Failed to grab frame")
             frame_grab_success = False
-            break
-
-        frame_grab_success = True
+        else:
+            frame_grab_success = True
 
         small_frame = cv2.resize(frame, (160, 120))  # Further reduced frame size
 
