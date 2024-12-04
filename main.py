@@ -223,6 +223,7 @@ if __name__ == '__main__':
     frame_grab_success = False
     updating_colors = False
     error_occurred = False
+    skipped_frames = 0
     flask_thread = threading.Thread(target=run_flask)
     video_thread = threading.Thread(target=run_video_capture)
     flask_thread.start()
