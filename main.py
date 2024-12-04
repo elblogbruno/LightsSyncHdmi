@@ -3,6 +3,7 @@ import numpy as np
 import os
 import dotenv
 import time
+import threading
 from flask import Flask, render_template, request, jsonify
 from sklearn.cluster import KMeans
 from api import CustomAPIClient
@@ -94,7 +95,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', smoothing_factor=smoothing_factor, update_interval=update_interval, light_entity_id=light_entity_id, media_player_entity_id=media_player_entity_id)
 
 @app.route('/turn_on', methods=['POST'])
 def turn_on():
@@ -127,71 +128,80 @@ def set_entity_ids():
     media_player_entity_id = request.json.get('media_player_entity_id', media_player_entity_id)
     return jsonify({"status": "success", "light_entity_id": light_entity_id, "media_player_entity_id": media_player_entity_id})
 
-if __name__ == '__main__':
+@app.route('/get_settings', methods=['GET'])
+def get_settings():
+    return jsonify({
+        "smoothing_factor": smoothing_factor,
+        "update_interval": update_interval,
+        "light_entity_id": light_entity_id,
+        "media_player_entity_id": media_player_entity_id
+    })
+
+def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
-skipped_frames = 0
-frame_count = 0
-debug_frames_dir = "debug_frames"
+def run_video_capture():
+    global prev_dominant_color, last_update_time, skipped_frames
+    while True:
+        if not is_tv_on():
+            print("Samsung TV is off. Pausing the script...")
+            turn_off_light()
+            time.sleep(1)
+            continue
 
-# Mantener el cambio de color basado en imágenes activo
-while True:
-    if not is_tv_on():
-        print("Samsung TV is off. Pausing the script...")
-        turn_off_light()
-        time.sleep(1)
-        continue
+        if skipped_frames < 10:
+            print("Skipping frames...")
+            cap.read()
+            skipped_frames += 1
+            continue
 
-    if skipped_frames < 10:
-        print("Skipping frames...")
-        cap.read()
-        skipped_frames += 1
-        continue
+        ret, frame = cap.read()
 
-    ret, frame = cap.read()
+        if not ret:
+            print("Failed to grab frame")
+            break
 
-    if not ret:
-        print("Failed to grab frame")
-        break
+        small_frame = cv2.resize(frame, (160, 120))  # Further reduced frame size
 
-    small_frame = cv2.resize(frame, (160, 120))  # Further reduced frame size
+        height, width, _ = small_frame.shape
+        mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
+        masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
 
-    height, width, _ = small_frame.shape
-    mask = np.zeros((height, width), dtype=np.uint8)
-    cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
-    masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
+        pixels = masked_frame.reshape((-1, 3))
+        pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
 
-    pixels = masked_frame.reshape((-1, 3))
-    pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
-
-    try:
-        kmeans = KMeans(n_clusters=4)  # Reduced number of clusters
-        kmeans.fit(pixels)
-        dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
-        print(f"Detected dominant color: {dominant_color}")
-    except Exception as e:
-        print(f"Error during KMeans clustering: {e}")
-        continue
-
-    # Save the frame for debugging
-    # frame_filename = os.path.join(debug_frames_dir, f"frame_{frame_count}_color_{dominant_color.astype(int)}.png")
-    # cv2.imwrite(frame_filename, frame)
-    # frame_count += 1
-
-    if time.time() - last_update_time > update_interval:
         try:
-            dominant_color = smooth_color(prev_dominant_color, dominant_color)
-            brightness = calculate_brightness(dominant_color)
-            brightness_pct = int((brightness / 255) * 100)
-            print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-            turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
-            prev_dominant_color = dominant_color
+            kmeans = KMeans(n_clusters=4)  # Reduced number of clusters
+            kmeans.fit(pixels)
+            dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
+            print(f"Detected dominant color: {dominant_color}")
         except Exception as e:
-            print(f"Error updating LED color: {e}")
-        last_update_time = time.time()
+            print(f"Error during KMeans clustering: {e}")
+            continue
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+        if time.time() - last_update_time > update_interval:
+            try:
+                dominant_color = smooth_color(prev_dominant_color, dominant_color)
+                brightness = calculate_brightness(dominant_color)
+                brightness_pct = int((brightness / 255) * 100)
+                print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
+                prev_dominant_color = dominant_color
+            except Exception as e:
+                print(f"Error updating LED color: {e}")
+            last_update_time = time.time()
 
-cap.release()
-cv2.destroyAllWindows()
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+    flask_thread = threading.Thread(target=run_flask)
+    video_thread = threading.Thread(target=run_video_capture)
+    flask_thread.start()
+    video_thread.start()
+    flask_thread.join()
+    video_thread.join()
