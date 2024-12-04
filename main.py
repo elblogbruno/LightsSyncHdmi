@@ -25,7 +25,7 @@ if not cap.isOpened():
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
 
-light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.habitacion")
+light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.ledcomedorsamsung")
 media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.samsung_qn85ca_75_2")
 
 last_update_time = time.time()
@@ -177,7 +177,10 @@ def run_video_capture():
             frame_grab_success = True
             error_occurred = False
 
-        small_frame = cv2.resize(frame, (160, 120))  # Further reduced frame size
+        # Apply Gaussian blur to reduce noise
+        blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
+
+        small_frame = cv2.resize(blurred_frame, (320, 240))  # Increased frame size for better accuracy
 
         height, width, _ = small_frame.shape
         mask = np.zeros((height, width), dtype=np.uint8)
@@ -208,7 +211,12 @@ def run_video_capture():
                     dominant_color_index = i
                     min_distance = distance
 
-            # print(f"Detected dominant color: {dominant_color}")
+            # Convert dominant color to HSV and adjust based on saturation and brightness
+            dominant_color_hsv = cv2.cvtColor(np.uint8([[dominant_color]]), cv2.COLOR_BGR2HSV)[0][0]
+            if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
+                dominant_color = prev_dominant_color  # Ignore low saturation or brightness colors
+
+            print(f"Detected dominant color: {dominant_color}")
         except Exception as e:
             print(f"Error during KMeans clustering: {e}")
             error_occurred = True
@@ -219,7 +227,7 @@ def run_video_capture():
                 dominant_color = smooth_color(prev_dominant_color, dominant_color)
                 brightness = calculate_brightness(dominant_color)
                 brightness_pct = int((brightness / 255) * 100)
-                # print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
                 turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
                 prev_dominant_color = dominant_color
                 updating_colors = True
