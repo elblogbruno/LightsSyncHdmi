@@ -3,10 +3,8 @@ import numpy as np
 import os
 import dotenv
 import time
-from homeassistant_api import Client
+from flask import Flask, render_template, request, jsonify
 from sklearn.cluster import KMeans
-import webcolors
-
 from api import CustomAPIClient
 
 dotenv.load_dotenv()
@@ -26,7 +24,7 @@ if not cap.isOpened():
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
 
-light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.LedComedorSamsung")
+light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.habitacion")
 media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.samsung_qn85ca_75_2")
 
 last_update_time = time.time()
@@ -91,24 +89,52 @@ def smooth_color(prev_color, new_color, factor=0.1):
 def calculate_brightness(color):
     return np.sqrt(0.299 * color[0]**2 + 0.587 * color[1]**2 + 0.114 * color[2]**2)
 
-# Create a directory to save frames
-debug_frames_dir = "debug_frames"
-os.makedirs(debug_frames_dir, exist_ok=True)
+# Initialize Flask app
+app = Flask(__name__)
 
-try:
-    print("Turning on the light...")
-    turn_on_light()
-    time.sleep(5)
-    print("Turning off the light...")
-    turn_off_light()
-except Exception as e:
-    print(f"Error controlling lights: {e}")
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-time.sleep(10)
+@app.route('/turn_on', methods=['POST'])
+def turn_on():
+    color = request.json.get('color', [255, 255, 255, 255, 255])
+    brightness = request.json.get('brightness', 100)
+    api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness, rgbww_color=color)
+    return jsonify({"status": "success"})
+
+@app.route('/turn_off', methods=['POST'])
+def turn_off():
+    api_client.turn_off(entity_id=light_entity_id)
+    return jsonify({"status": "success"})
+
+@app.route('/set_smoothing_factor', methods=['POST'])
+def set_smoothing_factor():
+    global smoothing_factor
+    smoothing_factor = request.json.get('smoothing_factor', 0.05)
+    return jsonify({"status": "success", "smoothing_factor": smoothing_factor})
+
+@app.route('/set_update_interval', methods=['POST'])
+def set_update_interval():
+    global update_interval
+    update_interval = request.json.get('update_interval', 0.5)
+    return jsonify({"status": "success", "update_interval": update_interval})
+
+@app.route('/set_entity_ids', methods=['POST'])
+def set_entity_ids():
+    global light_entity_id, media_player_entity_id
+    light_entity_id = request.json.get('light_entity_id', light_entity_id)
+    media_player_entity_id = request.json.get('media_player_entity_id', media_player_entity_id)
+    return jsonify({"status": "success", "light_entity_id": light_entity_id, "media_player_entity_id": media_player_entity_id})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
 
 skipped_frames = 0
 frame_count = 0
+debug_frames_dir = "debug_frames"
 
+# Mantener el cambio de color basado en imágenes activo
 while True:
     if not is_tv_on():
         print("Samsung TV is off. Pausing the script...")
@@ -148,9 +174,9 @@ while True:
         continue
 
     # Save the frame for debugging
-    frame_filename = os.path.join(debug_frames_dir, f"frame_{frame_count}_color_{dominant_color.astype(int)}.png")
-    cv2.imwrite(frame_filename, frame)
-    frame_count += 1
+    # frame_filename = os.path.join(debug_frames_dir, f"frame_{frame_count}_color_{dominant_color.astype(int)}.png")
+    # cv2.imwrite(frame_filename, frame)
+    # frame_count += 1
 
     if time.time() - last_update_time > update_interval:
         try:

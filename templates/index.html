@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Control</title>
+</head>
+<body>
+    <h1>Light Control</h1>
+    <button onclick="turnOnLight()">Turn On</button>
+    <button onclick="turnOffLight()">Turn Off</button>
+    <h2>Settings</h2>
+    <form id="settingsForm">
+        <label for="lightEntityId">Light Entity ID:</label>
+        <input type="text" id="lightEntityId" name="lightEntityId"><br><br>
+        <label for="mediaPlayerEntityId">TV Entity ID:</label>
+        <input type="text" id="mediaPlayerEntityId" name="mediaPlayerEntityId"><br><br>
+        <label for="smoothingFactor">Smoothing Factor:</label>
+        <input type="number" step="0.01" id="smoothingFactor" name="smoothingFactor"><br><br>
+        <label for="updateInterval">Update Interval (seconds):</label>
+        <input type="number" step="0.1" id="updateInterval" name="updateInterval"><br><br>
+        <button type="button" onclick="updateSettings()">Update Settings</button>
+    </form>
+    <script>
+        function turnOnLight() {
+            fetch('/turn_on', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ color: [255, 0, 0, 255, 255], brightness: 100 })
+            }).then(response => response.json())
+              .then(data => console.log(data));
+        }
+
+        function turnOffLight() {
+            fetch('/turn_off', {
+                method: 'POST'
+            }).then(response => response.json())
+              .then(data => console.log(data));
+        }
+
+        function updateSettings() {
+            const lightEntityId = document.getElementById('lightEntityId').value;
+            const mediaPlayerEntityId = document.getElementById('mediaPlayerEntityId').value;
+            const smoothingFactor = parseFloat(document.getElementById('smoothingFactor').value);
+            const updateInterval = parseFloat(document.getElementById('updateInterval').value);
+
+            fetch('/set_entity_ids', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ light_entity_id: lightEntityId, media_player_entity_id: mediaPlayerEntityId })
+            }).then(response => response.json())
+              .then(data => console.log(data));
+
+            fetch('/set_smoothing_factor', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ smoothing_factor: smoothingFactor })
+            }).then(response => response.json())
+              .then(data => console.log(data));
+
+            fetch('/set_update_interval', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ update_interval: updateInterval })
+            }).then(response => response.json())
+              .then(data => console.log(data));
+        }
+    </script>
+</body>
+</html>
