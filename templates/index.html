@@ -47,46 +47,81 @@
     <script>
         $(document).ready(function() {
             $('#turn_on').click(function() {
-                $.post('/turn_on', { color: [255, 255, 255, 255, 255], brightness: 100 }, function(data) {
-                    $('#feedback').text('Light turned on');
+                $.ajax({
+                    url: '/turn_on',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ color: [255, 255, 255, 255, 255], brightness: 100 }),
+                    success: function(data) {
+                        $('#feedback').text('Light turned on');
+                    }
                 });
             });
 
             $('#turn_off').click(function() {
-                $.post('/turn_off', function(data) {
-                    $('#feedback').text('Light turned off');
+                $.ajax({
+                    url: '/turn_off',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    success: function(data) {
+                        $('#feedback').text('Light turned off');
+                    }
                 });
             });
 
             $('#update_smoothing_factor').click(function() {
                 const newSmoothingFactor = parseFloat($('#new_smoothing_factor').val());
-                $.post('/set_smoothing_factor', { smoothing_factor: newSmoothingFactor }, function(data) {
-                    $('#smoothing_factor').text(data.smoothing_factor);
-                    $('#feedback').text('Smoothing factor updated');
+                $.ajax({
+                    url: '/set_smoothing_factor',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ smoothing_factor: newSmoothingFactor }),
+                    success: function(data) {
+                        $('#smoothing_factor').text(data.smoothing_factor);
+                        $('#feedback').text('Smoothing factor updated');
+                    }
                 });
             });
 
             $('#update_update_interval').click(function() {
                 const newUpdateInterval = parseFloat($('#new_update_interval').val());
-                $.post('/set_update_interval', { update_interval: newUpdateInterval }, function(data) {
-                    $('#update_interval').text(data.update_interval);
-                    $('#feedback').text('Update interval updated');
+                $.ajax({
+                    url: '/set_update_interval',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ update_interval: newUpdateInterval }),
+                    success: function(data) {
+                        $('#update_interval').text(data.update_interval);
+                        $('#feedback').text('Update interval updated');
+                    }
                 });
             });
 
             $('#update_light_entity_id').click(function() {
                 const newLightEntityId = $('#new_light_entity_id').val();
-                $.post('/set_entity_ids', { light_entity_id: newLightEntityId }, function(data) {
-                    $('#light_entity_id').text(data.light_entity_id);
-                    $('#feedback').text('Light entity ID updated');
+                $.ajax({
+                    url: '/set_entity_ids',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ light_entity_id: newLightEntityId }),
+                    success: function(data) {
+                        $('#light_entity_id').text(data.light_entity_id);
+                        $('#feedback').text('Light entity ID updated');
+                    }
                 });
             });
 
             $('#update_media_player_entity_id').click(function() {
                 const newMediaPlayerEntityId = $('#new_media_player_entity_id').val();
-                $.post('/set_entity_ids', { media_player_entity_id: newMediaPlayerEntityId }, function(data) {
-                    $('#media_player_entity_id').text(data.media_player_entity_id);
-                    $('#feedback').text('Media player entity ID updated');
+                $.ajax({
+                    url: '/set_entity_ids',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ media_player_entity_id: newMediaPlayerEntityId }),
+                    success: function(data) {
+                        $('#media_player_entity_id').text(data.media_player_entity_id);
+                        $('#feedback').text('Media player entity ID updated');
+                    }
                 });
             });
 
