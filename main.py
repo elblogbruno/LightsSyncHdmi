@@ -188,9 +188,26 @@ def run_video_capture():
         pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
 
         try:
-            kmeans = KMeans(n_clusters=4)  # Reduced number of clusters
+            kmeans = KMeans(n_clusters=8)  # Increased number of clusters
             kmeans.fit(pixels)
-            dominant_color = kmeans.cluster_centers_[np.argmax(np.bincount(kmeans.labels_))]
+            cluster_centers = kmeans.cluster_centers_
+            labels = kmeans.labels_
+
+            # Calculate the frequency of each cluster
+            label_counts = np.bincount(labels)
+            dominant_color_index = np.argmax(label_counts)
+
+            # Select the dominant color based on frequency and distance to previous color
+            dominant_color = cluster_centers[dominant_color_index]
+            min_distance = np.linalg.norm(dominant_color - prev_dominant_color)
+
+            for i, center in enumerate(cluster_centers):
+                distance = np.linalg.norm(center - prev_dominant_color)
+                if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
+                    dominant_color = center
+                    dominant_color_index = i
+                    min_distance = distance
+
             print(f"Detected dominant color: {dominant_color}")
         except Exception as e:
             print(f"Error during KMeans clustering: {e}")
