@@ -150,19 +150,23 @@ def get_feedback():
 
 @app.route('/random_frame')
 def random_frame():
-    global random_frame_encoded
+    global current_frame
+    if current_frame is None:
+        return Response(status=404)
+    
+    random_frame_encoded = cv2.imencode('.jpg', current_frame)[1].tobytes()
+
     return Response(random_frame_encoded, mimetype='image/jpeg')
 
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
 def run_video_capture():
-    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, random_frame_encoded
+    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
     frame_grab_success = False  # Inicializar la variable
     updating_colors = False  # Inicializar la variable
     error_occurred = False  # Inicializar la variable
-    random_frame_encoded = None  # Inicializar la variable
-    next_frame_time = time.time() + random.randint(1, 5)  # Inicializar el tiempo para el siguiente frame aleatorio
+    current_frame = None  # Inicializar la variable 
     while True:
         try:
             if not is_tv_on():
@@ -188,10 +192,7 @@ def run_video_capture():
                 error_occurred = False
 
             # Encode the frame to JPEG format at random intervals
-            if time.time() >= next_frame_time:
-                _, buffer = cv2.imencode('.jpg', frame)
-                random_frame_encoded = base64.b64encode(buffer).decode('utf-8')
-                next_frame_time = time.time() + random.randint(1, 5)  # Set the next random interval
+            current_frame = frame
 
             # Apply Gaussian blur to reduce noise
             blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
