@@ -4,9 +4,10 @@ import os
 import dotenv
 import time
 import threading
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from sklearn.cluster import MiniBatchKMeans
 from api import CustomAPIClient
+import base64
 
 dotenv.load_dotenv()
 
@@ -146,14 +147,20 @@ def get_feedback():
         "error_occurred": error_occurred
     })
 
+@app.route('/random_frame')
+def random_frame():
+    global random_frame_encoded
+    return Response(random_frame_encoded, mimetype='image/jpeg')
+
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
 def run_video_capture():
-    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred
+    global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, random_frame_encoded
     frame_grab_success = False  # Inicializar la variable
     updating_colors = False  # Inicializar la variable
     error_occurred = False  # Inicializar la variable
+    random_frame_encoded = None  # Inicializar la variable
     while True:
         try:
             if not is_tv_on():
@@ -177,6 +184,10 @@ def run_video_capture():
             else:
                 frame_grab_success = True
                 error_occurred = False
+
+            # Encode the frame to JPEG format
+            _, buffer = cv2.imencode('.jpg', frame)
+            random_frame_encoded = base64.b64encode(buffer).decode('utf-8')
 
             # Apply Gaussian blur to reduce noise
             blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
