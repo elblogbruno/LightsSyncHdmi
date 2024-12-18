@@ -7,7 +7,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-    <h1>Smart Room Control</h1>
+    <h1>Smart Lights TV Control</h1>
     <div>
         <h2>Current Settings</h2>
         <p>Smoothing Factor: <span id="smoothing_factor">{{ smoothing_factor }}</span></p>
@@ -45,6 +45,10 @@
         <p>Frame Grab Status: <span id="frame_grab_status"></span></p>
         <p>Updating Colors: <span id="updating_colors"></span></p>
         <p>Error Occurred: <span id="error_occurred"></span></p>
+    </div>
+    <div>
+        <h2>Random Frame</h2>
+        <img id="random-frame" src="/random_frame" alt="Random Frame" style="width: 320px; height: 240px;">
     </div>
     <script>
         $(document).ready(function() {
@@ -160,6 +164,11 @@
             setInterval(fetchSettings, 5000); // Fetch settings every 5 seconds
             setInterval(fetchFeedback, 1000); // Fetch feedback every 1 second
         });
+
+        function refreshFrame() {
+            document.getElementById('random-frame').src = '/random_frame?' + new Date().getTime();
+        }
+        setInterval(refreshFrame, 5000);
     </script>
 </body>
 </html>
