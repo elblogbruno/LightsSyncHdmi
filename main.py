@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, jsonify, Response
 from sklearn.cluster import MiniBatchKMeans
 from api import CustomAPIClient
 import base64
+import random
 
 dotenv.load_dotenv()
 
@@ -161,6 +162,7 @@ def run_video_capture():
     updating_colors = False  # Inicializar la variable
     error_occurred = False  # Inicializar la variable
     random_frame_encoded = None  # Inicializar la variable
+    next_frame_time = time.time() + random.randint(1, 5)  # Inicializar el tiempo para el siguiente frame aleatorio
     while True:
         try:
             if not is_tv_on():
@@ -185,9 +187,11 @@ def run_video_capture():
                 frame_grab_success = True
                 error_occurred = False
 
-            # Encode the frame to JPEG format
-            _, buffer = cv2.imencode('.jpg', frame)
-            random_frame_encoded = base64.b64encode(buffer).decode('utf-8')
+            # Encode the frame to JPEG format at random intervals
+            if time.time() >= next_frame_time:
+                _, buffer = cv2.imencode('.jpg', frame)
+                random_frame_encoded = base64.b64encode(buffer).decode('utf-8')
+                next_frame_time = time.time() + random.randint(1, 5)  # Set the next random interval
 
             # Apply Gaussian blur to reduce noise
             blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
