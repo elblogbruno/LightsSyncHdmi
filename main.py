@@ -155,91 +155,97 @@ def run_video_capture():
     updating_colors = False  # Inicializar la variable
     error_occurred = False  # Inicializar la variable
     while True:
-        if not is_tv_on():
-            print("Samsung TV is off. Pausing the script...")
-            turn_off_light()
-            time.sleep(1)
-            continue
-
-        if skipped_frames < 10:
-            print("Skipping frames...")
-            cap.read()
-            skipped_frames += 1
-            continue
-
-        ret, frame = cap.read()
-
-        if not ret:
-            print("Failed to grab frame")
-            frame_grab_success = False
-            error_occurred = True
-        else:
-            frame_grab_success = True
-            error_occurred = False
-
-        # Apply Gaussian blur to reduce noise
-        blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
-
-        small_frame = cv2.resize(blurred_frame, (320, 240))  # Increased frame size for better accuracy
-
-        height, width, _ = small_frame.shape
-        mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
-        masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
-
-        pixels = masked_frame.reshape((-1, 3))
-        pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
-
         try:
-            kmeans = MiniBatchKMeans(n_clusters=8)  # Use MiniBatchKMeans for better performance
-            kmeans.fit(pixels)
-            cluster_centers = kmeans.cluster_centers_
-            labels = kmeans.labels_
+            if not is_tv_on():
+                print("Samsung TV is off. Pausing the script...")
+                turn_off_light()
+                time.sleep(1)
+                continue
 
-            # Calculate the frequency of each cluster
-            label_counts = np.bincount(labels)
-            dominant_color_index = np.argmax(label_counts)
+            if skipped_frames < 10:
+                print("Skipping frames...")
+                cap.read()
+                skipped_frames += 1
+                continue
 
-            # Select the dominant color based on frequency and distance to previous color
-            dominant_color = cluster_centers[dominant_color_index]
-            min_distance = np.linalg.norm(dominant_color - prev_dominant_color)
+            ret, frame = cap.read()
 
-            for i, center in enumerate(cluster_centers):
-                distance = np.linalg.norm(center - prev_dominant_color)
-                if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
-                    dominant_color = center
-                    dominant_color_index = i
-                    min_distance = distance
-
-            # Convert dominant color to HSV and adjust based on saturation and brightness
-            dominant_color_hsv = cv2.cvtColor(np.uint8([[dominant_color]]), cv2.COLOR_BGR2HSV)[0][0]
-            if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
-                dominant_color = prev_dominant_color  # Ignore low saturation or brightness colors
-
-            print(f"Detected dominant color: {dominant_color}")
-        except Exception as e:
-            print(f"Error during KMeans clustering: {e}")
-            error_occurred = True
-            continue
-
-        if time.time() - last_update_time > update_interval:
-            try:
-                dominant_color = smooth_color(prev_dominant_color, dominant_color)
-                brightness = calculate_brightness(dominant_color)
-                brightness_pct = int((brightness / 255) * 100)
-                print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-                turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
-                prev_dominant_color = dominant_color
-                updating_colors = True
-                error_occurred = False
-            except Exception as e:
-                print(f"Error updating LED color: {e}")
-                updating_colors = False
+            if not ret:
+                print("Failed to grab frame")
+                frame_grab_success = False
                 error_occurred = True
-            last_update_time = time.time()
+            else:
+                frame_grab_success = True
+                error_occurred = False
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            # Apply Gaussian blur to reduce noise
+            blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
+
+            small_frame = cv2.resize(blurred_frame, (320, 240))  # Increased frame size for better accuracy
+
+            height, width, _ = small_frame.shape
+            mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
+            masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
+
+            pixels = masked_frame.reshape((-1, 3))
+            pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
+
+            try:
+                kmeans = MiniBatchKMeans(n_clusters=8)  # Use MiniBatchKMeans for better performance
+                kmeans.fit(pixels)
+                cluster_centers = kmeans.cluster_centers_
+                labels = kmeans.labels_
+
+                # Calculate the frequency of each cluster
+                label_counts = np.bincount(labels)
+                dominant_color_index = np.argmax(label_counts)
+
+                # Select the dominant color based on frequency and distance to previous color
+                dominant_color = cluster_centers[dominant_color_index]
+                min_distance = np.linalg.norm(dominant_color - prev_dominant_color)
+
+                for i, center in enumerate(cluster_centers):
+                    distance = np.linalg.norm(center - prev_dominant_color)
+                    if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
+                        dominant_color = center
+                        dominant_color_index = i
+                        min_distance = distance
+
+                # Convert dominant color to HSV and adjust based on saturation and brightness
+                dominant_color_hsv = cv2.cvtColor(np.uint8([[dominant_color]]), cv2.COLOR_BGR2HSV)[0][0]
+                if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
+                    dominant_color = prev_dominant_color  # Ignore low saturation or brightness colors
+
+                print(f"Detected dominant color: {dominant_color}")
+            except Exception as e:
+                print(f"Error during KMeans clustering: {e}")
+                error_occurred = True
+                continue
+
+            if time.time() - last_update_time > update_interval:
+                try:
+                    dominant_color = smooth_color(prev_dominant_color, dominant_color)
+                    brightness = calculate_brightness(dominant_color)
+                    brightness_pct = int((brightness / 255) * 100)
+                    print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                    turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
+                    prev_dominant_color = dominant_color
+                    updating_colors = True
+                    error_occurred = False
+                except Exception as e:
+                    print(f"Error updating LED color: {e}")
+                    updating_colors = False
+                    error_occurred = True
+                last_update_time = time.time()
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        except Exception as e:
+            print(f"Unexpected error in video capture loop: {e}")
+            error_occurred = True
+            time.sleep(1)  # Wait before retrying
 
     cap.release()
     cv2.destroyAllWindows()
