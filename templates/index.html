@@ -45,10 +45,17 @@
         <p>Frame Grab Status: <span id="frame_grab_status"></span></p>
         <p>Updating Colors: <span id="updating_colors"></span></p>
         <p>Error Occurred: <span id="error_occurred"></span></p>
+        <p>Flask Thread Alive: <span id="flask_thread_alive"></span></p>
+        <p>Video Thread Alive: <span id="video_thread_alive"></span></p>
     </div>
     <div>
         <h2>Random Frame</h2>
         <img id="random-frame" src="/random_frame" alt="Random Frame" style="width: 320px; height: 240px;">
+    </div>
+    <div>
+        <h2>Thread Control</h2>
+        <button id="restart_flask_thread">Restart Flask Thread</button>
+        <button id="restart_video_thread">Restart Video Thread</button>
     </div>
     <script>
         $(document).ready(function() {
@@ -131,6 +138,26 @@
                 });
             });
 
+            $('#restart_flask_thread').click(function() {
+                $.ajax({
+                    url: '/restart_flask_thread',
+                    type: 'POST',
+                    success: function(data) {
+                        $('#feedback').text(data.status);
+                    }
+                });
+            });
+
+            $('#restart_video_thread').click(function() {
+                $.ajax({
+                    url: '/restart_video_thread',
+                    type: 'POST',
+                    success: function(data) {
+                        $('#feedback').text(data.status);
+                    }
+                });
+            });
+
             function fetchSettings() {
                 $.get('/get_settings', function(data) {
                     $('#smoothing_factor').text(data.smoothing_factor);
@@ -157,6 +184,16 @@
                         $('#error_occurred').text('Yes').css('color', 'red');
                     } else {
                         $('#error_occurred').text('No').css('color', 'green');
+                    }
+                    if (data.flask_thread_alive) {
+                        $('#flask_thread_alive').text('Yes').css('color', 'green');
+                    } else {
+                        $('#flask_thread_alive').text('No').css('color', 'red');
+                    }
+                    if (data.video_thread_alive) {
+                        $('#video_thread_alive').text('Yes').css('color', 'green');
+                    } else {
+                        $('#video_thread_alive').text('No').css('color', 'red');
                     }
                 });
             }

@@ -5,10 +5,11 @@ import dotenv
 import time
 import threading
 from flask import Flask, render_template, request, jsonify, Response
-from sklearn.cluster import MiniBatchKMeans
+# from sklearn.cluster import MiniBatchKMeans
 from api import CustomAPIClient
-import base64
-import random
+# import base64
+# import random
+from color_algorithm import smooth_color, calculate_brightness, get_dominant_color
 
 dotenv.load_dotenv()
 
@@ -86,12 +87,6 @@ def turn_on_set_light(target_color, brightness_pct, count=0):
         print(f"Error controlling lights: {e}")
         turn_on_set_light(target_color, brightness_pct, count+1)
 
-def smooth_color(prev_color, new_color, factor=0.1):
-    return prev_color * (1 - factor) + new_color * factor
-
-def calculate_brightness(color):
-    return np.sqrt(0.299 * color[0]**2 + 0.587 * color[1]**2 + 0.114 * color[2]**2)
-
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -145,135 +140,135 @@ def get_feedback():
         "current_color": prev_dominant_color.tolist(),
         "frame_grab_success": frame_grab_success,
         "updating_colors": updating_colors,
-        "error_occurred": error_occurred
+        "error_occurred": error_occurred,
+        "flask_thread_alive": flask_thread.is_alive(),
+        "video_thread_alive": video_thread.is_alive()
     })
 
 @app.route('/random_frame')
 def random_frame():
     global current_frame
-    if current_frame is None:
+    if (current_frame is None):
         return Response(status=404)
     
     random_frame_encoded = cv2.imencode('.jpg', current_frame)[1].tobytes()
 
     return Response(random_frame_encoded, mimetype='image/jpeg')
 
+@app.route('/restart_flask_thread', methods=['POST'])
+def restart_flask_thread():
+    global flask_thread
+    if flask_thread.is_alive():
+        return jsonify({"status": "Flask thread is already running"})
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+    return jsonify({"status": "Flask thread restarted"})
+
+@app.route('/restart_video_thread', methods=['POST'])
+def restart_video_thread():
+    global video_thread
+    if video_thread.is_alive():
+        return jsonify({"status": "Video capture thread is already running"})
+    video_thread = threading.Thread(target=run_video_capture)
+    video_thread.start()
+    return jsonify({"status": "Video capture thread restarted"})
+
 def run_flask():
-    app.run(host='0.0.0.0', port=5000)
+    while True:
+        try:
+            app.run(host='0.0.0.0', port=5000)
+        except Exception as e:
+            print(f"Flask thread encountered an error: {e}")
+            time.sleep(1)  # Wait before retrying
 
 def run_video_capture():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
-    frame_grab_success = False  # Inicializar la variable
-    updating_colors = False  # Inicializar la variable
-    error_occurred = False  # Inicializar la variable
-    current_frame = None  # Inicializar la variable 
     while True:
         try:
-            if not is_tv_on():
-                print("Samsung TV is off. Pausing the script...")
-                turn_off_light()
-                time.sleep(1)
-                continue
-
-            if skipped_frames < 10:
-                print("Skipping frames...")
-                cap.read()
-                skipped_frames += 1
-                continue
-
-            ret, frame = cap.read()
-
-            if not ret:
-                print("Failed to grab frame")
-                frame_grab_success = False
-                error_occurred = True
-            else:
-                frame_grab_success = True
-                error_occurred = False
-
-            # Encode the frame to JPEG format at random intervals
-            current_frame = frame
-
-            # Apply Gaussian blur to reduce noise
-            blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
-
-            small_frame = cv2.resize(blurred_frame, (320, 240))  # Increased frame size for better accuracy
-
-            height, width, _ = small_frame.shape
-            mask = np.zeros((height, width), dtype=np.uint8)
-            cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
-            masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
-
-            pixels = masked_frame.reshape((-1, 3))
-            pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
-
-            try:
-                kmeans = MiniBatchKMeans(n_clusters=8)  # Use MiniBatchKMeans for better performance
-                kmeans.fit(pixels)
-                cluster_centers = kmeans.cluster_centers_
-                labels = kmeans.labels_
-
-                # Calculate the frequency of each cluster
-                label_counts = np.bincount(labels)
-                dominant_color_index = np.argmax(label_counts)
-
-                # Select the dominant color based on frequency and distance to previous color
-                dominant_color = cluster_centers[dominant_color_index]
-                min_distance = np.linalg.norm(dominant_color - prev_dominant_color)
-
-                for i, center in enumerate(cluster_centers):
-                    distance = np.linalg.norm(center - prev_dominant_color)
-                    if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
-                        dominant_color = center
-                        dominant_color_index = i
-                        min_distance = distance
-
-                # Convert dominant color to HSV and adjust based on saturation and brightness
-                dominant_color_hsv = cv2.cvtColor(np.uint8([[dominant_color]]), cv2.COLOR_BGR2HSV)[0][0]
-                if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
-                    dominant_color = prev_dominant_color  # Ignore low saturation or brightness colors
-
-                print(f"Detected dominant color: {dominant_color}")
-            except Exception as e:
-                print(f"Error during KMeans clustering: {e}")
-                error_occurred = True
-                continue
-
-            if time.time() - last_update_time > update_interval:
+            frame_grab_success = False  # Inicializar la variable
+            updating_colors = False  # Inicializar la variable
+            error_occurred = False  # Inicializar la variable
+            current_frame = None  # Inicializar la variable 
+            while True:
                 try:
-                    dominant_color = smooth_color(prev_dominant_color, dominant_color)
-                    brightness = calculate_brightness(dominant_color)
-                    brightness_pct = int((brightness / 255) * 100)
-                    print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-                    turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
-                    prev_dominant_color = dominant_color
-                    updating_colors = True
-                    error_occurred = False
+                    if not is_tv_on():
+                        print("Samsung TV is off. Pausing the script...")
+                        turn_off_light()
+                        time.sleep(1)
+                        continue
+
+                    if skipped_frames < 10:
+                        print("Skipping frames...")
+                        cap.read()
+                        skipped_frames += 1
+                        continue
+
+                    ret, frame = cap.read()
+
+                    if not ret:
+                        print("Failed to grab frame")
+                        frame_grab_success = False
+                        error_occurred = True
+                    else:
+                        frame_grab_success = True
+                        error_occurred = False
+
+                    # Encode the frame to JPEG format at random intervals
+                    current_frame = frame
+
+                    # Get the dominant color
+                    dominant_color = get_dominant_color(frame, prev_dominant_color)
+
+                    if time.time() - last_update_time > update_interval:
+                        try:
+                            dominant_color = smooth_color(prev_dominant_color, dominant_color)
+                            brightness = calculate_brightness(dominant_color)
+                            brightness_pct = int((brightness / 255) * 100)
+                            print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                            turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
+                            prev_dominant_color = dominant_color
+                            updating_colors = True
+                            error_occurred = False
+                        except Exception as e:
+                            print(f"Error updating LED color: {e}")
+                            updating_colors = False
+                            error_occurred = True
+                        last_update_time = time.time()
+
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+
                 except Exception as e:
-                    print(f"Error updating LED color: {e}")
-                    updating_colors = False
+                    print(f"Unexpected error in video capture loop: {e}")
                     error_occurred = True
-                last_update_time = time.time()
+                    time.sleep(1)  # Wait before retrying
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
+            cap.release()
+            cv2.destroyAllWindows()
         except Exception as e:
-            print(f"Unexpected error in video capture loop: {e}")
-            error_occurred = True
+            print(f"Video capture thread encountered an error: {e}")
             time.sleep(1)  # Wait before retrying
-
-    cap.release()
-    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     frame_grab_success = False
     updating_colors = False
     error_occurred = False
     skipped_frames = 0
+
     flask_thread = threading.Thread(target=run_flask)
     video_thread = threading.Thread(target=run_video_capture)
     flask_thread.start()
     video_thread.start()
-    flask_thread.join()
-    video_thread.join()
+
+    while True:
+        if not flask_thread.is_alive():
+            print("Flask thread stopped. Restarting...")
+            flask_thread = threading.Thread(target=run_flask)
+            flask_thread.start()
+
+        if not video_thread.is_alive():
+            print("Video capture thread stopped. Restarting...")
+            video_thread = threading.Thread(target=run_video_capture)
+            video_thread.start()
+
+        time.sleep(1)  # Check thread status every second
