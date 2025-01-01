@@ -21,25 +21,31 @@ def get_dominant_color(frame, prev_dominant_color):
     pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
 
     try:
-        kmeans = MiniBatchKMeans(n_clusters=8)
-        kmeans.fit(pixels)
+        # Convert pixels to HSV color space for better clustering
+        pixels_hsv = cv2.cvtColor(pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
+
+        kmeans = MiniBatchKMeans(n_clusters=16)  # Increase number of clusters
+        kmeans.fit(pixels_hsv)
         cluster_centers = kmeans.cluster_centers_
         labels = kmeans.labels_
 
         label_counts = np.bincount(labels)
         dominant_color_index = np.argmax(label_counts)
 
-        dominant_color = cluster_centers[dominant_color_index]
-        min_distance = np.linalg.norm(dominant_color - prev_dominant_color)
+        dominant_color_hsv = cluster_centers[dominant_color_index]
+        min_distance = np.linalg.norm(dominant_color_hsv - cv2.cvtColor(np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV)[0][0])
 
         for i, center in enumerate(cluster_centers):
-            distance = np.linalg.norm(center - prev_dominant_color)
+            distance = np.linalg.norm(center - cv2.cvtColor(np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV)[0][0])
             if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
-                dominant_color = center
+                dominant_color_hsv = center
                 dominant_color_index = i
                 min_distance = distance
 
-        dominant_color_hsv = cv2.cvtColor(np.uint8([[dominant_color]]), cv2.COLOR_BGR2HSV)[0][0]
+        # Convert dominant color back to BGR
+        dominant_color = cv2.cvtColor(np.uint8([[dominant_color_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
+
+        # Fallback mechanism for low saturation or brightness colors
         if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
             dominant_color = prev_dominant_color
 
