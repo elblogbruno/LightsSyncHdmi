@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify, Response
 from api import CustomAPIClient
 # import base64
 # import random
-from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color, get_dominant_color_median, get_dominant_color_mode
+from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode
 
 dotenv.load_dotenv()
 
