@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify, Response
 from api import CustomAPIClient
 # import base64
 # import random
-from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode
+from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
 
 dotenv.load_dotenv()
 
@@ -75,18 +75,18 @@ def turn_off_light(count=0):
         print(f"Error controlling lights: {e}")
         turn_off_light(count+1)
 
-def turn_on_set_light(target_color, brightness_pct, count=0):
+def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], count=0):
     if count >= 3:
         print("Failed to turn on the light after 3 attempts. Exiting the script...")
         return
     
     try:
-        rgbww_color = target_color + [255, 255]
+        rgbww_color = target_color + rgbww_values
         print(f"Setting light color to: {rgbww_color} with brightness: {brightness_pct}%")
         api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgbww_color=rgbww_color)
     except Exception as e:
         print(f"Error controlling lights: {e}")
-        turn_on_set_light(target_color, brightness_pct, count+1)
+        turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -146,6 +146,7 @@ def get_settings():
 def get_feedback():
     return jsonify({
         "current_color": prev_dominant_color.tolist(),
+        "ww_values": calculate_ww_values(prev_dominant_color),  # Incluir valores WW
         "frame_grab_success": frame_grab_success,
         "updating_colors": updating_colors,
         "error_occurred": error_occurred,
@@ -233,7 +234,8 @@ def run_video_capture():
                             brightness = calculate_brightness(dominant_color)
                             brightness_pct = int((brightness / 255) * 100)
                             print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-                            turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct)
+                            ww_values = calculate_ww_values(dominant_color)  # Calcular valores WW basados en el color
+                            turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
                             prev_dominant_color = dominant_color
                             updating_colors = True
                             error_occurred = False

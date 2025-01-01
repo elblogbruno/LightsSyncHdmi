@@ -8,6 +8,12 @@ def smooth_color(prev_color, new_color, factor=0.1):
 def calculate_brightness(color):
     return np.sqrt(0.299 * color[0]**2 + 0.587 * color[1]**2 + 0.114 * color[2]**2)
 
+def calculate_ww_values(color):
+    # Ejemplo simple: ajustar los valores WW en función del brillo del color
+    brightness = calculate_brightness(color)
+    ww_value = int((brightness / 255) * 255)
+    return [ww_value, ww_value]
+
 def get_dominant_color_kmeans(frame, prev_dominant_color):
     blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
     small_frame = cv2.resize(blurred_frame, (320, 240))
@@ -48,6 +54,9 @@ def get_dominant_color_kmeans(frame, prev_dominant_color):
         # Fallback mechanism for low saturation or brightness colors
         if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
             dominant_color = prev_dominant_color
+
+        # convert to rgb
+        dominant_color = dominant_color[::-1]
 
         return dominant_color
     except Exception as e:

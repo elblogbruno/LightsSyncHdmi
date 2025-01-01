@@ -51,6 +51,7 @@
         <h2>Real-time Feedback</h2>
         <p id="feedback"></p>
         <p>Current Color: <span id="current_color"></span> <div id="color_display" style="display: inline-block; width: 20px; height: 20px; border: 1px solid #000;"></div></p>
+        <p>WW Values: <span id="ww_values"></span></p>
         <p>Frame Grab Status: <span id="frame_grab_status"></span></p>
         <p>Updating Colors: <span id="updating_colors"></span></p>
         <p>Error Occurred: <span id="error_occurred"></span></p>
@@ -69,11 +70,14 @@
     <script>
         $(document).ready(function() {
             $('#turn_on').click(function() {
+                const color = [255, 255, 255]; // Example color
+                const brightness = 100; // Example brightness
+                const rgbww_values = [255, 255]; // Example rgbww values
                 $.ajax({
                     url: '/turn_on',
                     type: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ color: [255, 255, 255, 255, 255], brightness: 100 }),
+                    data: JSON.stringify({ color: color.concat(rgbww_values), brightness: brightness }),
                     success: function(data) {
                         $('#feedback').text('Light turned on');
                     }
@@ -193,10 +197,12 @@
             function fetchFeedback() {
                 $.get('/get_feedback', function(data) {
                     console.log(data);
-                    const rgbColor = `rgb(${data.current_color})`;
+                    let rgbColor;
+                    rgbColor = `rgb(${data.current_color})`;
                     console.log(rgbColor);
                     $('#current_color').text(rgbColor);
                     $('#color_display').css('background-color', rgbColor);
+                    $('#ww_values').text(data.ww_values); // Mostrar valores WW
                     if (data.frame_grab_success) {
                         $('#frame_grab_status').text('Success').css('color', 'green');
                     } else {
