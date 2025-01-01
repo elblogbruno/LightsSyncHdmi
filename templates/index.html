@@ -50,7 +50,7 @@
     <div>
         <h2>Real-time Feedback</h2>
         <p id="feedback"></p>
-        <p>Current Color: <span id="current_color"></span></p>
+        <p>Current Color: <span id="current_color"></span> <div id="color_display" style="display: inline-block; width: 20px; height: 20px; border: 1px solid #000;"></div></p>
         <p>Frame Grab Status: <span id="frame_grab_status"></span></p>
         <p>Updating Colors: <span id="updating_colors"></span></p>
         <p>Error Occurred: <span id="error_occurred"></span></p>
@@ -193,6 +193,7 @@
             function fetchFeedback() {
                 $.get('/get_feedback', function(data) {
                     $('#current_color').text(data.current_color);
+                    $('#color_display').css('background-color', data.current_color);
                     if (data.frame_grab_success) {
                         $('#frame_grab_status').text('Success').css('color', 'green');
                     } else {
