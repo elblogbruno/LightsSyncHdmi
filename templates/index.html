@@ -192,8 +192,11 @@
 
             function fetchFeedback() {
                 $.get('/get_feedback', function(data) {
-                    $('#current_color').text(data.current_color);
-                    $('#color_display').css('background-color', data.current_color);
+                    console.log(data);
+                    const rgbColor = `rgb(${data.current_color})`;
+                    console.log(rgbColor);
+                    $('#current_color').text(rgbColor);
+                    $('#color_display').css('background-color', rgbColor);
                     if (data.frame_grab_success) {
                         $('#frame_grab_status').text('Success').css('color', 'green');
                     } else {
