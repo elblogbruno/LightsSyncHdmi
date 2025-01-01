@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify, Response
 from api import CustomAPIClient
 # import base64
 # import random
-from color_algorithm import smooth_color, calculate_brightness, get_dominant_color
+from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color, get_dominant_color_median, get_dominant_color_mode
 
 dotenv.load_dotenv()
 
@@ -30,6 +30,7 @@ prev_dominant_color = np.array([255, 255, 255])
 
 light_entity_id = os.environ.get("LIGHT_ENTITY_ID", "light.ledcomedorsamsung")
 media_player_entity_id = os.environ.get("MEDIA_PLAYER_ENTITY_ID", "media_player.samsung_qn85ca_75_2")
+color_algorithm = os.environ.get("COLOR_ALGORITHM", "kmeans")
 
 last_update_time = time.time()
 update_interval = 1.0  # Increased update interval for better performance
@@ -125,13 +126,20 @@ def set_entity_ids():
     media_player_entity_id = request.json.get('media_player_entity_id', media_player_entity_id)
     return jsonify({"status": "success", "light_entity_id": light_entity_id, "media_player_entity_id": media_player_entity_id})
 
+@app.route('/set_color_algorithm', methods=['POST'])
+def set_color_algorithm():
+    global color_algorithm
+    color_algorithm = request.json.get('color_algorithm', 'kmeans')
+    return jsonify({"status": "success", "color_algorithm": color_algorithm})
+
 @app.route('/get_settings', methods=['GET'])
 def get_settings():
     return jsonify({
         "smoothing_factor": smoothing_factor,
         "update_interval": update_interval,
         "light_entity_id": light_entity_id,
-        "media_player_entity_id": media_player_entity_id
+        "media_player_entity_id": media_player_entity_id,
+        "color_algorithm": color_algorithm
     })
 
 @app.route('/get_feedback', methods=['GET'])
@@ -248,6 +256,18 @@ def run_video_capture():
         except Exception as e:
             print(f"Video capture thread encountered an error: {e}")
             time.sleep(1)  # Wait before retrying
+
+def get_dominant_color(frame, prev_dominant_color):
+    if color_algorithm == "kmeans":
+        return get_dominant_color_kmeans(frame, prev_dominant_color)
+    elif color_algorithm == "average":
+        return get_dominant_color_average(frame)
+    elif color_algorithm == "median":
+        return get_dominant_color_median(frame)
+    elif color_algorithm == "mode":
+        return get_dominant_color_mode(frame)
+    else:
+        return prev_dominant_color
 
 if __name__ == '__main__':
     frame_grab_success = False

@@ -32,6 +32,15 @@
         <label for="new_media_player_entity_id">Media Player Entity ID:</label>
         <input type="text" id="new_media_player_entity_id">
         <button id="update_media_player_entity_id">Update</button>
+        <br>
+        <label for="color_algorithm">Color Algorithm:</label>
+        <select id="color_algorithm">
+            <option value="kmeans">KMeans</option>
+            <option value="average">Average</option>
+            <option value="median">Median</option>
+            <option value="mode">Mode</option>
+        </select>
+        <button id="update_color_algorithm">Update</button>
     </div>
     <div>
         <h2>Control Panel</h2>
@@ -138,6 +147,19 @@
                 });
             });
 
+            $('#update_color_algorithm').click(function() {
+                const newColorAlgorithm = $('#color_algorithm').val();
+                $.ajax({
+                    url: '/set_color_algorithm',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ color_algorithm: newColorAlgorithm }),
+                    success: function(data) {
+                        $('#feedback').text('Color algorithm updated');
+                    }
+                });
+            });
+
             $('#restart_flask_thread').click(function() {
                 $.ajax({
                     url: '/restart_flask_thread',
@@ -164,6 +186,7 @@
                     $('#update_interval').text(data.update_interval);
                     $('#light_entity_id').text(data.light_entity_id);
                     $('#media_player_entity_id').text(data.media_player_entity_id);
+                    $('#color_algorithm').val(data.color_algorithm);
                 });
             }
 

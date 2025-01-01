@@ -8,7 +8,7 @@ def smooth_color(prev_color, new_color, factor=0.1):
 def calculate_brightness(color):
     return np.sqrt(0.299 * color[0]**2 + 0.587 * color[1]**2 + 0.114 * color[2]**2)
 
-def get_dominant_color(frame, prev_dominant_color):
+def get_dominant_color_kmeans(frame, prev_dominant_color):
     blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
     small_frame = cv2.resize(blurred_frame, (320, 240))
 
@@ -53,3 +53,23 @@ def get_dominant_color(frame, prev_dominant_color):
     except Exception as e:
         print(f"Error during KMeans clustering: {e}")
         return prev_dominant_color
+
+def get_dominant_color_average(frame):
+    blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
+    small_frame = cv2.resize(blurred_frame, (320, 240))
+    average_color = np.mean(small_frame, axis=(0, 1))
+    return average_color
+
+def get_dominant_color_median(frame):
+    blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
+    small_frame = cv2.resize(blurred_frame, (320, 240))
+    median_color = np.median(small_frame, axis=(0, 1))
+    return median_color
+
+def get_dominant_color_mode(frame):
+    blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
+    small_frame = cv2.resize(blurred_frame, (320, 240))
+    pixels = small_frame.reshape((-1, 3))
+    pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
+    mode_color = np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis=0, arr=pixels)
+    return mode_color
