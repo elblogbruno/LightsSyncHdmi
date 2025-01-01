@@ -206,7 +206,7 @@ def run_video_capture():
                         time.sleep(1)
                         continue
 
-                    if skipped_frames < 10:
+                    if skipped_frames < 5:  # Reducir el número de fotogramas omitidos
                         print("Skipping frames...")
                         cap.read()
                         skipped_frames += 1

@@ -16,7 +16,7 @@ def calculate_ww_values(color):
 
 def get_dominant_color_kmeans(frame, prev_dominant_color):
     blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
-    small_frame = cv2.resize(blurred_frame, (320, 240))
+    small_frame = cv2.resize(blurred_frame, (160, 120))  # Reducir aún más la resolución
 
     height, width, _ = small_frame.shape
     mask = np.zeros((height, width), dtype=np.uint8)
@@ -30,7 +30,7 @@ def get_dominant_color_kmeans(frame, prev_dominant_color):
         # Convert pixels to HSV color space for better clustering
         pixels_hsv = cv2.cvtColor(pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
 
-        kmeans = MiniBatchKMeans(n_clusters=16)  # Increase number of clusters
+        kmeans = MiniBatchKMeans(n_clusters=8)  # Reducir el número de clusters
         kmeans.fit(pixels_hsv)
         cluster_centers = kmeans.cluster_centers_
         labels = kmeans.labels_
