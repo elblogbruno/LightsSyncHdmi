@@ -58,8 +58,8 @@ def turn_on_light(count=0):
         print("Failed to turn on the light after 3 attempts. Exiting the script...")
         exit()
     try:
-        rgbww_color = [255, 0, 0, 255, 255]
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgbww_color=rgbww_color)
+        rgb_color = [255, 0, 0]
+        api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgb_color=rgb_color)
     except Exception as e:
         print(f"Error controlling lights: {e}")
         turn_on_light(count+1)
@@ -69,8 +69,7 @@ def turn_off_light(count=0):
         print("Failed to turn off the light after 3 attempts. Exiting the script...")
         exit()
     try:
-        rgbww_color = [0, 0, 0, 0, 0]
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=0, rgbww_color=rgbww_color)
+        api_client.turn_off(entity_id=light_entity_id)
     except Exception as e:
         print(f"Error controlling lights: {e}")
         turn_off_light(count+1)
@@ -81,9 +80,9 @@ def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], cou
         return
     
     try:
-        rgbww_color = target_color + rgbww_values
-        print(f"Setting light color to: {rgbww_color} with brightness: {brightness_pct}%")
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgbww_color=rgbww_color)
+        rgb_color = target_color
+        print(f"Setting light color to: {rgb_color} with brightness: {brightness_pct}%")
+        api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgb_color=rgb_color)
     except Exception as e:
         print(f"Error controlling lights: {e}")
         turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
@@ -99,9 +98,9 @@ def index():
 
 @app.route('/turn_on', methods=['POST'])
 def turn_on():
-    color = request.json.get('color', [255, 255, 255, 255, 255])
+    color = request.json.get('color', [255, 255, 255])
     brightness = request.json.get('brightness', 100)
-    api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness, rgbww_color=color)
+    api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness, rgb_color=color)
     return jsonify({"status": "success"})
 
 @app.route('/turn_off', methods=['POST'])

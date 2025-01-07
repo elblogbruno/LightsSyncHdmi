@@ -19,15 +19,15 @@ class CustomAPIClient:
             print(f"Error fetching entity: {response.status_code} - {response.text}")
             return None
 
-    def turn_on(self, entity_id, brightness_pct=100, rgbww_color=None):
+    def turn_on(self, entity_id, brightness_pct=100, rgb_color=None):
         url = self.url + "/services/light/turn_on"
         data = {
             "entity_id": entity_id,
             "brightness_pct": brightness_pct 
         }
 
-        if rgbww_color:
-            data["rgbww_color"] = rgbww_color
+        if rgb_color:
+            data["rgb_color"] = rgb_color
 
         try:
             response = post(url, headers=self.headers, json=data)
@@ -39,7 +39,7 @@ class CustomAPIClient:
         except Exception as e:
             print(f"Error turning on light: {e} - {url}")
 
-    def turn_off(self, entity_id, brightness_pct=100, rgbww_color=None):
+    def turn_off(self, entity_id):
         url = self.url + "/services/light/turn_off"
         data = {
             "entity_id": entity_id, 

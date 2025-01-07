@@ -74,12 +74,11 @@
             $('#turn_on').click(function() {
                 const color = [255, 255, 255]; // Example color
                 const brightness = 100; // Example brightness
-                const rgbww_values = [255, 255]; // Example rgbww values
                 $.ajax({
                     url: '/turn_on',
                     type: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ color: color.concat(rgbww_values), brightness: brightness }),
+                    data: JSON.stringify({ color: color, brightness: brightness }),
                     success: function(data) {
                         $('#feedback').text('Light turned on');
                     }
