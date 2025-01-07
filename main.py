@@ -91,6 +91,8 @@ def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], cou
 # Initialize Flask app
 app = Flask(__name__)
 
+pause_color_change = False
+
 @app.route('/')
 def index():
     return render_template('index.html', smoothing_factor=smoothing_factor, update_interval=update_interval, light_entity_id=light_entity_id, media_player_entity_id=media_player_entity_id)
@@ -132,6 +134,18 @@ def set_color_algorithm():
     color_algorithm = request.json.get('color_algorithm', 'kmeans')
     return jsonify({"status": "success", "color_algorithm": color_algorithm})
 
+@app.route('/pause', methods=['POST'])
+def pause():
+    global pause_color_change
+    pause_color_change = True
+    return jsonify({"status": "paused"})
+
+@app.route('/resume', methods=['POST'])
+def resume():
+    global pause_color_change
+    pause_color_change = False
+    return jsonify({"status": "resumed"})
+
 @app.route('/get_settings', methods=['GET'])
 def get_settings():
     return jsonify({
@@ -152,7 +166,8 @@ def get_feedback():
         "error_occurred": error_occurred,
         "flask_thread_alive": flask_thread.is_alive(),
         "video_thread_alive": video_thread.is_alive(),
-        "tv_status": is_tv_on()  # Incluir el estado de la TV
+        "tv_status": is_tv_on(),  # Incluir el estado de la TV
+        "pause_color_change": pause_color_change  # Incluir el estado de pausa
     })
 
 @app.route('/random_frame')
@@ -225,6 +240,11 @@ def run_video_capture():
 
                     # Encode the frame to JPEG format at random intervals
                     current_frame = frame
+
+                    if pause_color_change:
+                        print("Color change is paused.")
+                        time.sleep(1)
+                        continue
 
                     # Get the dominant color
                     dominant_color = get_dominant_color(frame, prev_dominant_color)

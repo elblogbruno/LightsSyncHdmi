@@ -46,6 +46,7 @@
         <h2>Control Panel</h2>
         <button id="turn_on">Turn On</button>
         <button id="turn_off">Turn Off</button>
+        <button id="pause_resume">Pause</button> <!-- Nuevo botón para pausar/reanudar -->
     </div>
     <div>
         <h2>Real-time Feedback</h2>
@@ -181,6 +182,21 @@
                     type: 'POST',
                     success: function(data) {
                         $('#feedback').text(data.status);
+                    }
+                });
+            });
+
+            let isPaused = false;
+
+            $('#pause_resume').click(function() {
+                isPaused = !isPaused;
+                const action = isPaused ? 'pause' : 'resume';
+                $.ajax({
+                    url: `/${action}`,
+                    type: 'POST',
+                    success: function(data) {
+                        $('#feedback').text(`Color change ${action}d`);
+                        $('#pause_resume').text(isPaused ? 'Resume' : 'Pause');
                     }
                 });
             });
