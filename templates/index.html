@@ -57,6 +57,7 @@
         <p>Error Occurred: <span id="error_occurred"></span></p>
         <p>Flask Thread Alive: <span id="flask_thread_alive"></span></p>
         <p>Video Thread Alive: <span id="video_thread_alive"></span></p>
+        <p>TV Status: <span id="tv_status"></span></p> <!-- Nueva línea para mostrar el estado de la TV -->
     </div>
     <div>
         <h2>Random Frame</h2>
@@ -227,6 +228,11 @@
                         $('#video_thread_alive').text('Yes').css('color', 'green');
                     } else {
                         $('#video_thread_alive').text('No').css('color', 'red');
+                    }
+                    if (data.tv_status) {
+                        $('#tv_status').text('On').css('color', 'green');
+                    } else {
+                        $('#tv_status').text('Off').css('color', 'red');
                     }
                 });
             }

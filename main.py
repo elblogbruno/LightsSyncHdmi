@@ -151,7 +151,8 @@ def get_feedback():
         "updating_colors": updating_colors,
         "error_occurred": error_occurred,
         "flask_thread_alive": flask_thread.is_alive(),
-        "video_thread_alive": video_thread.is_alive()
+        "video_thread_alive": video_thread.is_alive(),
+        "tv_status": is_tv_on()  # Incluir el estado de la TV
     })
 
 @app.route('/random_frame')

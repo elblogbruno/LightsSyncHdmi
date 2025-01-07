@@ -6,6 +6,7 @@ class CustomAPIClient:
         self.headers = {
             "Authorization": "Bearer " + token,
             "content-type": "application/json",
+            "cache-control": "no-cache"
         }
 
     def get_entity(self, entity_id):
