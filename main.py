@@ -193,7 +193,7 @@ async def get_feedback():
 async def random_frame():
     global current_frame
     if current_frame is None:
-        return JSONResponse(status_code=404)
+        return JSONResponse(content={"message": "Frame not found"}, status_code=404)
     
     random_frame_encoded = cv2.imencode('.jpg', current_frame)[1].tobytes()
     return StreamingResponse(io.BytesIO(random_frame_encoded), media_type="image/jpeg")
