@@ -157,6 +157,9 @@ def get_settings():
 
 @app.route('/get_feedback', methods=['GET'])
 def get_feedback():
+    global frame_grab_success, updating_colors, error_occurred, current_frame
+    frame_grab_success = frame_grab_success and current_frame is not None
+    updating_colors = updating_colors and not error_occurred
     return jsonify({
         "current_color": prev_dominant_color.tolist(),
         "ww_values": calculate_ww_values(prev_dominant_color),  # Incluir valores WW
