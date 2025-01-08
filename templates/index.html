@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Room Control</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
 </head>
 <body>
     <h1>Smart Lights TV Control</h1>
@@ -200,11 +201,13 @@
                 });
             });
 
-            const socket = new WebSocket('ws://' + window.location.host + '/ws');
+            var socket = io();
+            socket.on('connect', function() {
+                socket.emit('my event', {data: 'I\'m connected!'});
+            });
 
-            socket.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                let rgbColor = `rgb(${data.current_color})`;
+            socket.on('feedback', function(data) {
+                const rgbColor = `rgb(${data.current_color})`;
                 $('#current_color').text(rgbColor);
                 $('#color_display').css('background-color', rgbColor);
                 $('#brightness_pct').text(data.brightness_pct); // Mostrar brightness_pct
@@ -238,7 +241,7 @@
                 } else {
                     $('#tv_status').text('Off').css('color', 'red');
                 }
-            };
+            });
 
             function refreshFrame() {
                 document.getElementById('random-frame').src = '/random_frame?' + new Date().getTime();
