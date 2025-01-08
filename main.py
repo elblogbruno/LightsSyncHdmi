@@ -39,7 +39,7 @@ update_interval = 1.0  # Increased update interval for better performance
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 def is_tv_on(count=0):
     if count >= 3:
