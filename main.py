@@ -177,14 +177,18 @@ def get_feedback():
         "pause_color_change": pause_color_change  # Incluir el estado de pausa
     })
 
+@socketio.event
+def my_event(message): # pylint: disable=unused-argument
+    emit_feedback()
+
+
 @app.route('/random_frame')
 def random_frame():
     global current_frame
-    if (current_frame is None):
+    if current_frame is None:
         return Response(status=404)
     
     random_frame_encoded = cv2.imencode('.jpg', current_frame)[1].tobytes()
-
     return Response(random_frame_encoded, mimetype='image/jpeg')
 
 @app.route('/restart_flask_thread', methods=['POST'])
@@ -205,8 +209,8 @@ def restart_video_thread():
     video_thread.start()
     return jsonify({"status": "Video capture thread restarted"})
 
-@socketio.on('connect')
-def handle_connect():
+@socketio.event
+def connect():
     emit_feedback()
 
 def emit_feedback():
