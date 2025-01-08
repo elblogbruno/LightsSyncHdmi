@@ -229,7 +229,7 @@ def emit_feedback():
 def run_flask():
     while True:
         try:
-            socketio.run(app, host='0.0.0.0', port=5000)
+            socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
         except Exception as e:
             print(f"Flask thread encountered an error: {e}")
             time.sleep(1)  # Wait before retrying
