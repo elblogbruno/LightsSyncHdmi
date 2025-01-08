@@ -1,16 +1,18 @@
+import io
 import cv2
 import numpy as np
 import os
 import dotenv
 import time
 import threading
-from flask import Flask, render_template, request, jsonify, Response
-from flask_socketio import SocketIO, emit
-# from sklearn.cluster import MiniBatchKMeans
+from fastapi import FastAPI, WebSocket, Request
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.websockets import WebSocketDisconnect
 from api import CustomAPIClient
-# import base64
-# import random
 from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
+
+import asyncio
 
 dotenv.load_dotenv()
 
@@ -38,8 +40,15 @@ update_interval = 1.0  # Increased update interval for better performance
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
 
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def is_tv_on(count=0):
     if count >= 3:
@@ -91,67 +100,70 @@ def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], cou
         print(f"Error controlling lights: {e}")
         turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
 
-# Initialize Flask app
-app = Flask(__name__)
-
 pause_color_change = False
 
-@app.route('/')
-def index():
-    return render_template('index.html', smoothing_factor=smoothing_factor, update_interval=update_interval, light_entity_id=light_entity_id, media_player_entity_id=media_player_entity_id)
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    with open("templates/index.html") as f:
+        return HTMLResponse(content=f.read())
 
-@app.route('/turn_on', methods=['POST'])
-def turn_on():
-    color = request.json.get('color', [255, 255, 255])
-    brightness = request.json.get('brightness', 100)
+@app.post("/turn_on")
+async def turn_on(request: Request):
+    data = await request.json()
+    color = data.get('color', [255, 255, 255])
+    brightness = data.get('brightness', 100)
     api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness, rgb_color=color)
-    return jsonify({"status": "success"})
+    return JSONResponse({"status": "success"})
 
-@app.route('/turn_off', methods=['POST'])
-def turn_off():
+@app.post("/turn_off")
+async def turn_off():
     api_client.turn_off(entity_id=light_entity_id)
-    return jsonify({"status": "success"})
+    return JSONResponse({"status": "success"})
 
-@app.route('/set_smoothing_factor', methods=['POST'])
-def set_smoothing_factor():
+@app.post("/set_smoothing_factor")
+async def set_smoothing_factor(request: Request):
     global smoothing_factor
-    smoothing_factor = request.json.get('smoothing_factor', 0.05)
-    return jsonify({"status": "success", "smoothing_factor": smoothing_factor})
+    data = await request.json()
+    smoothing_factor = data.get('smoothing_factor', 0.05)
+    return JSONResponse({"status": "success", "smoothing_factor": smoothing_factor})
 
-@app.route('/set_update_interval', methods=['POST'])
-def set_update_interval():
+@app.post("/set_update_interval")
+async def set_update_interval(request: Request):
     global update_interval
-    update_interval = request.json.get('update_interval', 0.5)
-    return jsonify({"status": "success", "update_interval": update_interval})
+    data = await request.json()
+    update_interval = data.get('update_interval', 0.5)
+    return JSONResponse({"status": "success", "update_interval": update_interval})
 
-@app.route('/set_entity_ids', methods=['POST'])
-def set_entity_ids():
+@app.post("/set_entity_ids")
+async def set_entity_ids(request: Request):
     global light_entity_id, media_player_entity_id
-    light_entity_id = request.json.get('light_entity_id', light_entity_id)
-    media_player_entity_id = request.json.get('media_player_entity_id', media_player_entity_id)
-    return jsonify({"status": "success", "light_entity_id": light_entity_id, "media_player_entity_id": media_player_entity_id})
+    data = await request.json()
+    light_entity_id = data.get('light_entity_id', light_entity_id)
+    media_player_entity_id = data.get('media_player_entity_id', media_player_entity_id)
+    return JSONResponse({"status": "success", "light_entity_id": light_entity_id, "media_player_entity_id": media_player_entity_id})
 
-@app.route('/set_color_algorithm', methods=['POST'])
-def set_color_algorithm():
+@app.post("/set_color_algorithm")
+async def set_color_algorithm(request: Request):
     global color_algorithm
-    color_algorithm = request.json.get('color_algorithm', 'kmeans')
-    return jsonify({"status": "success", "color_algorithm": color_algorithm})
+    data = await request.json()
+    color_algorithm = data.get('color_algorithm', 'kmeans')
+    return JSONResponse({"status": "success", "color_algorithm": color_algorithm})
 
-@app.route('/pause', methods=['POST'])
-def pause():
+@app.post("/pause")
+async def pause():
     global pause_color_change
     pause_color_change = True
-    return jsonify({"status": "paused"})
+    return JSONResponse({"status": "paused"})
 
-@app.route('/resume', methods=['POST'])
-def resume():
+@app.post("/resume")
+async def resume():
     global pause_color_change
     pause_color_change = False
-    return jsonify({"status": "resumed"})
+    return JSONResponse({"status": "resumed"})
 
-@app.route('/get_settings', methods=['GET'])
-def get_settings():
-    return jsonify({
+@app.get("/get_settings")
+async def get_settings():
+    return JSONResponse({
         "smoothing_factor": smoothing_factor,
         "update_interval": update_interval,
         "light_entity_id": light_entity_id,
@@ -159,13 +171,13 @@ def get_settings():
         "color_algorithm": color_algorithm
     })
 
-@app.route('/get_feedback', methods=['GET'])
-def get_feedback():
+@app.get("/get_feedback")
+async def get_feedback():
     global frame_grab_success, updating_colors, error_occurred, current_frame
     frame_grab_success = frame_grab_success and current_frame is not None
     updating_colors = updating_colors and not error_occurred
     brightness_pct = int((calculate_brightness(prev_dominant_color) / 255) * 100)
-    return jsonify({
+    return JSONResponse({
         "current_color": prev_dominant_color.tolist(),
         "brightness_pct": brightness_pct,  # Incluir brightness_pct
         "frame_grab_success": frame_grab_success,
@@ -177,48 +189,49 @@ def get_feedback():
         "pause_color_change": pause_color_change  # Incluir el estado de pausa
     })
 
-@socketio.event
-def my_event(message): # pylint: disable=unused-argument
-    emit_feedback()
-
-
-@app.route('/random_frame')
-def random_frame():
+@app.get("/random_frame")
+async def random_frame():
     global current_frame
     if current_frame is None:
-        return Response(status=404)
+        return JSONResponse(status_code=404)
     
     random_frame_encoded = cv2.imencode('.jpg', current_frame)[1].tobytes()
-    return Response(random_frame_encoded, mimetype='image/jpeg')
+    return StreamingResponse(io.BytesIO(random_frame_encoded), media_type="image/jpeg")
 
-@app.route('/restart_flask_thread', methods=['POST'])
-def restart_flask_thread():
+@app.post("/restart_flask_thread")
+async def restart_flask_thread():
     global flask_thread
     if flask_thread.is_alive():
-        return jsonify({"status": "Flask thread is already running"})
+        return JSONResponse({"status": "Flask thread is already running"})
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
-    return jsonify({"status": "Flask thread restarted"})
+    return JSONResponse({"status": "Flask thread restarted"})
 
-@app.route('/restart_video_thread', methods=['POST'])
-def restart_video_thread():
+@app.post("/restart_video_thread")
+async def restart_video_thread():
     global video_thread
     if video_thread.is_alive():
-        return jsonify({"status": "Video capture thread is already running"})
+        return JSONResponse({"status": "Video capture thread is already running"})
     video_thread = threading.Thread(target=run_video_capture)
     video_thread.start()
-    return jsonify({"status": "Video capture thread restarted"})
+    return JSONResponse({"status": "Video capture thread restarted"})
 
-@socketio.event
-def connect():
-    emit_feedback()
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            await emit_feedback(websocket)
+            await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
 
-def emit_feedback():
+async def emit_feedback(websocket: WebSocket):
     global frame_grab_success, updating_colors, error_occurred, current_frame
     frame_grab_success = frame_grab_success and current_frame is not None
     updating_colors = updating_colors and not error_occurred
     brightness_pct = int((calculate_brightness(prev_dominant_color) / 255) * 100)
-    socketio.emit('feedback', {
+    await websocket.send_json({
         "current_color": prev_dominant_color.tolist(),
         "brightness_pct": brightness_pct,  # Incluir brightness_pct
         "frame_grab_success": frame_grab_success,
@@ -231,12 +244,8 @@ def emit_feedback():
     })
 
 def run_flask():
-    while True:
-        try:
-            socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
-        except Exception as e:
-            print(f"Flask thread encountered an error: {e}")
-            time.sleep(1)  # Wait before retrying
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=5000)
 
 def run_video_capture():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
@@ -297,8 +306,6 @@ def run_video_capture():
                             updating_colors = False
                             error_occurred = True
                         last_update_time = time.time()
-
-                    emit_feedback()
 
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
