@@ -200,66 +200,51 @@
                 });
             });
 
-            function fetchSettings() {
-                $.get('/get_settings', function(data) {
-                    $('#smoothing_factor').text(data.smoothing_factor);
-                    $('#update_interval').text(data.update_interval);
-                    $('#light_entity_id').text(data.light_entity_id);
-                    $('#media_player_entity_id').text(data.media_player_entity_id);
-                    $('#color_algorithm').val(data.color_algorithm);
-                });
-            }
+            const socket = new WebSocket('ws://' + window.location.host + '/ws');
 
-            function fetchFeedback() {
-                $.get('/get_feedback', function(data) {
-                    console.log(data);
-                    let rgbColor;
-                    rgbColor = `rgb(${data.current_color})`;
-                    console.log(rgbColor);
-                    $('#current_color').text(rgbColor);
-                    $('#color_display').css('background-color', rgbColor);
-                    $('#brightness_pct').text(data.brightness_pct); // Mostrar brightness_pct
-                    if (data.frame_grab_success) {
-                        $('#frame_grab_status').text('Success').css('color', 'green');
-                    } else {
-                        $('#frame_grab_status').text('Failed').css('color', 'red');
-                    }
-                    if (data.updating_colors) {
-                        $('#updating_colors').text('Yes').css('color', 'green');
-                    } else {
-                        $('#updating_colors').text('No').css('color', 'red');
-                    }
-                    if (data.error_occurred) {
-                        $('#error_occurred').text('Yes').css('color', 'red');
-                    } else {
-                        $('#error_occurred').text('No').css('color', 'green');
-                    }
-                    if (data.flask_thread_alive) {
-                        $('#flask_thread_alive').text('Yes').css('color', 'green');
-                    } else {
-                        $('#flask_thread_alive').text('No').css('color', 'red');
-                    }
-                    if (data.video_thread_alive) {
-                        $('#video_thread_alive').text('Yes').css('color', 'green');
-                    } else {
-                        $('#video_thread_alive').text('No').css('color', 'red');
-                    }
-                    if (data.tv_status) {
-                        $('#tv_status').text('On').css('color', 'green');
-                    } else {
-                        $('#tv_status').text('Off').css('color', 'red');
-                    }
-                });
-            }
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                let rgbColor = `rgb(${data.current_color})`;
+                $('#current_color').text(rgbColor);
+                $('#color_display').css('background-color', rgbColor);
+                $('#brightness_pct').text(data.brightness_pct); // Mostrar brightness_pct
+                if (data.frame_grab_success) {
+                    $('#frame_grab_status').text('Success').css('color', 'green');
+                } else {
+                    $('#frame_grab_status').text('Failed').css('color', 'red');
+                }
+                if (data.updating_colors) {
+                    $('#updating_colors').text('Yes').css('color', 'green');
+                } else {
+                    $('#updating_colors').text('No').css('color', 'red');
+                }
+                if (data.error_occurred) {
+                    $('#error_occurred').text('Yes').css('color', 'red');
+                } else {
+                    $('#error_occurred').text('No').css('color', 'green');
+                }
+                if (data.flask_thread_alive) {
+                    $('#flask_thread_alive').text('Yes').css('color', 'green');
+                } else {
+                    $('#flask_thread_alive').text('No').css('color', 'red');
+                }
+                if (data.video_thread_alive) {
+                    $('#video_thread_alive').text('Yes').css('color', 'green');
+                } else {
+                    $('#video_thread_alive').text('No').css('color', 'red');
+                }
+                if (data.tv_status) {
+                    $('#tv_status').text('On').css('color', 'green');
+                } else {
+                    $('#tv_status').text('Off').css('color', 'red');
+                }
+            };
 
-            setInterval(fetchSettings, 5000); // Fetch settings every 5 seconds
-            setInterval(fetchFeedback, 1000); // Fetch feedback every 1 second
+            function refreshFrame() {
+                document.getElementById('random-frame').src = '/random_frame?' + new Date().getTime();
+            }
+            setInterval(refreshFrame, 5000);
         });
-
-        function refreshFrame() {
-            document.getElementById('random-frame').src = '/random_frame?' + new Date().getTime();
-        }
-        setInterval(refreshFrame, 5000);
     </script>
 </body>
 </html>

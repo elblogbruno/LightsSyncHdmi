@@ -5,6 +5,7 @@ import dotenv
 import time
 import threading
 from flask import Flask, render_template, request, jsonify, Response
+from flask_socketio import SocketIO, emit
 # from sklearn.cluster import MiniBatchKMeans
 from api import CustomAPIClient
 # import base64
@@ -36,6 +37,9 @@ last_update_time = time.time()
 update_interval = 1.0  # Increased update interval for better performance
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
+
+app = Flask(__name__)
+socketio = SocketIO(app)
 
 def is_tv_on(count=0):
     if count >= 3:
@@ -201,10 +205,31 @@ def restart_video_thread():
     video_thread.start()
     return jsonify({"status": "Video capture thread restarted"})
 
+@socketio.on('connect')
+def handle_connect():
+    emit_feedback()
+
+def emit_feedback():
+    global frame_grab_success, updating_colors, error_occurred, current_frame
+    frame_grab_success = frame_grab_success and current_frame is not None
+    updating_colors = updating_colors and not error_occurred
+    brightness_pct = int((calculate_brightness(prev_dominant_color) / 255) * 100)
+    socketio.emit('feedback', {
+        "current_color": prev_dominant_color.tolist(),
+        "brightness_pct": brightness_pct,  # Incluir brightness_pct
+        "frame_grab_success": frame_grab_success,
+        "updating_colors": updating_colors,
+        "error_occurred": error_occurred,
+        "flask_thread_alive": flask_thread.is_alive(),
+        "video_thread_alive": video_thread.is_alive(),
+        "tv_status": is_tv_on(),  # Incluir el estado de la TV
+        "pause_color_change": pause_color_change  # Incluir el estado de pausa
+    })
+
 def run_flask():
     while True:
         try:
-            app.run(host='0.0.0.0', port=5000)
+            socketio.run(app, host='0.0.0.0', port=5000)
         except Exception as e:
             print(f"Flask thread encountered an error: {e}")
             time.sleep(1)  # Wait before retrying
@@ -268,6 +293,8 @@ def run_video_capture():
                             updating_colors = False
                             error_occurred = True
                         last_update_time = time.time()
+
+                    emit_feedback()
 
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
