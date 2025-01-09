@@ -72,72 +72,102 @@ class CustomWebsocketClient:
         self.outgoing_queue = Queue()
         self.incoming_queue = Queue()
         self.pending_responses = {}
+        self._running = False
+        self._tasks = []
 
     async def init_socket(self):
-        async with websockets.connect(self.host) as websocket:
-            self.websocket = websocket
+        self._running = True
+        try:
+            async with websockets.connect(self.host) as websocket:
+                self.websocket = websocket
 
-            # Enviar autenticación
-            auth_msg = {'type': 'auth', 'access_token': self.token}
-            await self.websocket.send(json.dumps(auth_msg))
-            
-            # Esperar la respuesta de autenticación
-            while True:
-                auth_response = await self.websocket.recv()
-                data = json.loads(auth_response)
+                # Autenticación
+                auth_msg = {'type': 'auth', 'access_token': self.token}
+                await self.websocket.send(json.dumps(auth_msg))
                 
-                # Home Assistant puede enviar mensajes de auth_required antes de auth_ok
-                if data.get('type') == 'auth_ok':
-                    print("Authentication successful")
-                    break
-                elif data.get('type') == 'auth_invalid':
-                    print("Authentication failed")
-                    return
-                # Ignorar otros tipos de mensajes durante la autenticación
-            
-            # Continuar con la suscripción a eventos
-            await self.websocket.send(json.dumps({
-                'id': 1, 
-                'type': 'subscribe_events',
-                'event_type': 'state_changed'
-            }))
+                while True:
+                    auth_response = await self.websocket.recv()
+                    data = json.loads(auth_response)
+                    if data.get('type') == 'auth_ok':
+                        print("Authentication successful")
+                        break
+                    elif data.get('type') == 'auth_invalid':
+                        print("Authentication failed")
+                        return
 
-            print("Subscribed to events")
+                # Suscripción a eventos
+                await self.websocket.send(json.dumps({
+                    'id': 1, 
+                    'type': 'subscribe_events',
+                    'event_type': 'state_changed'
+                }))
 
-            # Iniciar tareas de envío y recepción
-            send_task = asyncio.create_task(self._send_loop())
-            receive_task = asyncio.create_task(self._receive_loop())
-            
-            await asyncio.gather(send_task, receive_task)
+                print("Subscribed to events")
+
+                # Crear y guardar referencias a las tareas
+                send_task = asyncio.create_task(self._send_loop())
+                receive_task = asyncio.create_task(self._receive_loop())
+                self._tasks = [send_task, receive_task]
+
+                # Esperar a que cualquiera de las tareas termine
+                done, pending = await asyncio.wait(
+                    self._tasks,
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+
+                # Cancelar las tareas pendientes
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+
+        except Exception as e:
+            print(f"WebSocket connection error: {e}")
+        finally:
+            self._running = False
+            self.websocket = None
+            # Limpiar las colas
+            while not self.outgoing_queue.empty():
+                await self.outgoing_queue.get()
+            while not self.incoming_queue.empty():
+                await self.incoming_queue.get()
 
     async def _send_loop(self):
-        while True:
-            message = await self.outgoing_queue.get()
-            if message is None:
-                break
-            await self.websocket.send(json.dumps(message))
+        try:
+            while self._running:
+                try:
+                    message = await asyncio.wait_for(
+                        self.outgoing_queue.get(), 
+                        timeout=1.0
+                    )
+                    if message is None:
+                        break
+                    await self.websocket.send(json.dumps(message))
+                except asyncio.TimeoutError:
+                    continue
+        except Exception as e:
+            print(f"Send loop error: {e}")
 
     async def _receive_loop(self):
-        while True:
-            try:
-                message = await self.websocket.recv()
-                data = json.loads(message)
-                
-                if 'type' in data:
-                    if data['type'] == 'event':
-                        await self._handle_state_event(data)
-                    elif data['type'] == 'result':
-                        # Manejar respuestas a comandos
-                        if 'id' in data and data['id'] in self.pending_responses:
-                            self.pending_responses[data['id']].set_result(data)
-                    else:
-                        print(f"Received unknown message type: {data}")
-
-            except Exception as e:
-                print(f"Error in receive loop: {e}")
-                if not self.websocket.open:
-                    print("WebSocket connection lost")
+        try:
+            while self._running:
+                try:
+                    message = await self.websocket.recv()
+                    data = json.loads(message)
+                    
+                    if 'type' in data:
+                        if data['type'] == 'event':
+                            await self._handle_state_event(data)
+                        elif data['type'] == 'result':
+                            if 'id' in data and data['id'] in self.pending_responses:
+                                self.pending_responses[data['id']].set_result(data)
+                except Exception as e:
+                    print(f"Receive loop error: {e}")
                     break
+        finally:
+            self._running = False
 
     async def _handle_state_event(self, data):
         try:
