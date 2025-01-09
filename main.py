@@ -9,18 +9,27 @@ from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
-from api import CustomAPIClient
+from api import CustomAPIClient, CustomWebsocketClient
 from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 
 import asyncio
 
 dotenv.load_dotenv()
 
 print("Starting the script...")
-cap = cv2.VideoCapture(0)
 
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+start_time = time.time()
+cap = cv2.VideoCapture(0)
+if os.cpu_count() < 4:
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+
+if not cap.isOpened():
+    print("Error: Could not open camera.")
+else:
+    print(f"Camera opened in {time.time() - start_time:.2f} seconds")
 
 print("Video capture object created...")
 
@@ -38,7 +47,15 @@ color_algorithm = os.environ.get("COLOR_ALGORITHM", "kmeans")
 last_update_time = time.time()
 update_interval = 1.0  # Increased update interval for better performance
 
-api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
+# api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
+
+# we pass the entities to the websocket client so we can get the state of the TV and the light and control the light
+entities = [
+    light_entity_id,
+    media_player_entity_id
+]
+api_client_websocket = CustomWebsocketClient(os.environ['HASSIO_HOST_WEBSOCKET'], os.environ['HASSIO_TOKEN'], entities=entities)
+
 
 app = FastAPI()
 
@@ -50,44 +67,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def is_tv_on(count=0):
-    if count >= 3:
-        print("Failed to check TV state after 3 attempts. Exiting the script...")
-        return False
-    
-    try:
-        tv = api_client.get_entity(entity_id=media_player_entity_id)
-        if not tv:
-            return False
-        
-        print(tv["state"]  + " " +  str(time.time()))
-        return tv["state"] == "on"
-    except Exception as e:
-        print(f"Error checking TV state: {e}")
-        return is_tv_on(count+1)
-    
-def turn_on_light(count=0):
+# Configurar Jinja2Templates
+templates = Jinja2Templates(directory="templates")
+
+def is_tv_on():
+    return api_client_websocket.entities_status.get(media_player_entity_id) == "on"
+
+async def turn_on_light(count=0):
     if count >= 3:
         print("Failed to turn on the light after 3 attempts. Exiting the script...")
         exit()
     try:
         rgb_color = [255, 0, 0]
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgb_color=rgb_color)
+        await api_client_websocket.turn_on(entity_id=light_entity_id, brightness_pct=100, rgb_color=rgb_color)
     except Exception as e:
         print(f"Error controlling lights: {e}")
-        turn_on_light(count+1)
+        await turn_on_light(count+1)
 
-def turn_off_light(count=0):
+async def turn_off_light(count=0):
     if count >= 3:
         print("Failed to turn off the light after 3 attempts. Exiting the script...")
         exit()
     try:
-        api_client.turn_off(entity_id=light_entity_id)
+        await api_client_websocket.turn_off(entity_id=light_entity_id)
     except Exception as e:
-        print(f"Error controlling lights: {e}")
-        turn_off_light(count+1)
+        print(f"Error turning off lights: {e}")
+        await turn_off_light(count+1)
 
-def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], count=0):
+async def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], count=0):
     if count >= 3:
         print("Failed to turn on the light after 3 attempts. Exiting the script...")
         return
@@ -95,29 +102,34 @@ def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], cou
     try:
         rgb_color = target_color
         print(f"Setting light color to: {rgb_color} with brightness: {brightness_pct}%")
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgb_color=rgb_color)
+        await api_client_websocket.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgb_color=rgb_color)
     except Exception as e:
-        print(f"Error controlling lights: {e}")
-        turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
+        print(f"Error turning on lights: {e}")
+        await turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
 
 pause_color_change = False
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    with open("templates/index.html") as f:
-        return HTMLResponse(content=f.read())
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "smoothing_factor": smoothing_factor,
+        "update_interval": update_interval,
+        "light_entity_id": light_entity_id,
+        "media_player_entity_id": media_player_entity_id
+    })
 
 @app.post("/turn_on")
 async def turn_on(request: Request):
     data = await request.json()
     color = data.get('color', [255, 255, 255])
     brightness = data.get('brightness', 100)
-    api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness, rgb_color=color)
+    await api_client_websocket.turn_on(entity_id=light_entity_id, brightness_pct=brightness, rgb_color=color)
     return JSONResponse({"status": "success"})
 
 @app.post("/turn_off")
 async def turn_off():
-    api_client.turn_off(entity_id=light_entity_id)
+    await api_client_websocket.turn_off(entity_id=light_entity_id)
     return JSONResponse({"status": "success"})
 
 @app.post("/set_smoothing_factor")
@@ -247,23 +259,23 @@ def run_flask():
     import uvicorn
     uvicorn.run(app, host='0.0.0.0', port=5000)
 
-def run_video_capture():
+async def run_video_capture():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
     while True:
         try:
-            frame_grab_success = False  # Inicializar la variable
-            updating_colors = False  # Inicializar la variable
-            error_occurred = False  # Inicializar la variable
-            current_frame = None  # Inicializar la variable 
+            frame_grab_success = False
+            updating_colors = False
+            error_occurred = False
+            current_frame = None
             while True:
                 try:
                     if not is_tv_on():
                         print("Samsung TV is off. Pausing the script...")
-                        turn_off_light()
-                        time.sleep(1)
-                        continue
+                        await turn_off_light()
+                        await asyncio.sleep(1)
+                        break
 
-                    if skipped_frames < 5:  # Reducir el número de fotogramas omitidos
+                    if skipped_frames < 5:
                         print("Skipping frames...")
                         cap.read()
                         skipped_frames += 1
@@ -279,15 +291,13 @@ def run_video_capture():
                         frame_grab_success = True
                         error_occurred = False
 
-                    # Encode the frame to JPEG format at random intervals
                     current_frame = frame
 
                     if pause_color_change:
                         print("Color change is paused.")
-                        time.sleep(1)
+                        await asyncio.sleep(1)
                         continue
 
-                    # Get the dominant color
                     dominant_color = get_dominant_color(frame, prev_dominant_color)
 
                     if time.time() - last_update_time > update_interval:
@@ -296,8 +306,8 @@ def run_video_capture():
                             brightness = calculate_brightness(dominant_color)
                             brightness_pct = int((brightness / 255) * 100)
                             print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-                            ww_values = calculate_ww_values(dominant_color)  # Calcular valores WW basados en el color
-                            turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
+                            ww_values = calculate_ww_values(dominant_color)
+                            await turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
                             prev_dominant_color = dominant_color
                             updating_colors = True
                             error_occurred = False
@@ -313,13 +323,13 @@ def run_video_capture():
                 except Exception as e:
                     print(f"Unexpected error in video capture loop: {e}")
                     error_occurred = True
-                    time.sleep(1)  # Wait before retrying
+                    await asyncio.sleep(1)
 
             cap.release()
             cv2.destroyAllWindows()
         except Exception as e:
             print(f"Video capture thread encountered an error: {e}")
-            time.sleep(1)  # Wait before retrying
+            await asyncio.sleep(1)
 
 def get_dominant_color(frame, prev_dominant_color):
     if color_algorithm == "kmeans":
@@ -340,9 +350,11 @@ if __name__ == '__main__':
     skipped_frames = 0
 
     flask_thread = threading.Thread(target=run_flask)
-    video_thread = threading.Thread(target=run_video_capture)
+    video_thread = threading.Thread(target=asyncio.run, args=(run_video_capture(),))
+    websocket_thread = threading.Thread(target=asyncio.run, args=(api_client_websocket.init_socket(),))
     flask_thread.start()
     video_thread.start()
+    websocket_thread.start()
 
     while True:
         if not flask_thread.is_alive():
@@ -352,7 +364,12 @@ if __name__ == '__main__':
 
         if not video_thread.is_alive():
             print("Video capture thread stopped. Restarting...")
-            video_thread = threading.Thread(target=run_video_capture)
+            video_thread = threading.Thread(target=asyncio.run, args=(run_video_capture(),))
             video_thread.start()
+
+        if not websocket_thread.is_alive():
+            print("Websocket thread stopped. Restarting...")
+            websocket_thread = threading.Thread(target=asyncio.run, args=(api_client_websocket.init_socket(),))
+            websocket_thread.start()
 
         time.sleep(1)  # Check thread status every second

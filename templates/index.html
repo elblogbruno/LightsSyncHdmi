@@ -63,6 +63,7 @@
     <div>
         <h2>Random Frame</h2>
         <img id="random-frame" src="/random_frame" alt="Random Frame" style="width: 320px; height: 240px;">
+        <p id="frame-error" style="color: red; display: none;">Frame not available</p> <!-- Message for frame not available -->
     </div>
     <div>
         <h2>Thread Control</h2>
@@ -71,6 +72,26 @@
     </div>
     <script>
         $(document).ready(function() {
+            // Llenar los inputs con los valores actuales
+            $('#new_smoothing_factor').val('{{ smoothing_factor }}');
+            $('#new_update_interval').val('{{ update_interval }}');
+            $('#new_light_entity_id').val('{{ light_entity_id }}');
+            $('#new_media_player_entity_id').val('{{ media_player_entity_id }}');
+
+            // Alternativamente, cargar los valores via AJAX
+            $.get('/get_settings', function(data) {
+                $('#smoothing_factor').text(data.smoothing_factor);
+                $('#update_interval').text(data.update_interval);
+                $('#light_entity_id').text(data.light_entity_id);
+                $('#media_player_entity_id').text(data.media_player_entity_id);
+                
+                // También actualizar los inputs
+                $('#new_smoothing_factor').val(data.smoothing_factor);
+                $('#new_update_interval').val(data.update_interval);
+                $('#new_light_entity_id').val(data.light_entity_id);
+                $('#new_media_player_entity_id').val(data.media_player_entity_id);
+            });
+
             $('#turn_on').click(function() {
                 const color = [255, 255, 255]; // Example color
                 const brightness = 100; // Example brightness
@@ -249,7 +270,14 @@
             };
 
             function refreshFrame() {
-                document.getElementById('random-frame').src = '/random_frame?' + new Date().getTime();
+                const img = document.getElementById('random-frame');
+                img.src = '/random_frame?' + new Date().getTime();
+                img.onerror = function() {
+                    $('#frame-error').show();
+                };
+                img.onload = function() {
+                    $('#frame-error').hide();
+                };
             }
             setInterval(refreshFrame, 5000);
         });
