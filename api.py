@@ -77,25 +77,32 @@ class CustomWebsocketClient:
         async with websockets.connect(self.host) as websocket:
             self.websocket = websocket
 
-            # Enviar autenticación y esperar respuesta
+            # Enviar autenticación
             auth_msg = {'type': 'auth', 'access_token': self.token}
             await self.websocket.send(json.dumps(auth_msg))
             
-            auth_response = await self.websocket.recv()
-            auth_response = json.loads(auth_response)
+            # Esperar la respuesta de autenticación
+            while True:
+                auth_response = await self.websocket.recv()
+                data = json.loads(auth_response)
+                
+                # Home Assistant puede enviar mensajes de auth_required antes de auth_ok
+                if data.get('type') == 'auth_ok':
+                    print("Authentication successful")
+                    break
+                elif data.get('type') == 'auth_invalid':
+                    print("Authentication failed")
+                    return
+                # Ignorar otros tipos de mensajes durante la autenticación
             
-            if auth_response.get('type') != 'auth_ok':
-                print(f"Authentication failed: {auth_response}")
-                return
-            
-            print("Authentication successful")
-
-            # Suscribirse a eventos después de autenticación exitosa
+            # Continuar con la suscripción a eventos
             await self.websocket.send(json.dumps({
                 'id': 1, 
                 'type': 'subscribe_events',
                 'event_type': 'state_changed'
             }))
+
+            print("Subscribed to events")
 
             # Iniciar tareas de envío y recepción
             send_task = asyncio.create_task(self._send_loop())
