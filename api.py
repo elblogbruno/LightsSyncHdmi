@@ -77,21 +77,30 @@ class CustomWebsocketClient:
         async with websockets.connect(self.host) as websocket:
             self.websocket = websocket
 
-            # Autenticación
-            await self.websocket.send(json.dumps({'type': 'auth','access_token': self.token}))
-            await self.websocket.send(json.dumps({'id': 2, 'type': 'auth_ok'}))
-
-            await self.websocket.send(json.dumps({'id': 1, 'type': 'subscribe_events', 'event_type': 'state_changed'}))
-
-            # send Send auth_ok message 
+            # Enviar autenticación y esperar respuesta
+            auth_msg = {'type': 'auth', 'access_token': self.token}
+            await self.websocket.send(json.dumps(auth_msg))
             
-            print("Socket connected and subscribed to events from Home Assistant")
+            auth_response = await self.websocket.recv()
+            auth_response = json.loads(auth_response)
+            
+            if auth_response.get('type') != 'auth_ok':
+                print(f"Authentication failed: {auth_response}")
+                return
+            
+            print("Authentication successful")
+
+            # Suscribirse a eventos después de autenticación exitosa
+            await self.websocket.send(json.dumps({
+                'id': 1, 
+                'type': 'subscribe_events',
+                'event_type': 'state_changed'
+            }))
 
             # Iniciar tareas de envío y recepción
             send_task = asyncio.create_task(self._send_loop())
             receive_task = asyncio.create_task(self._receive_loop())
             
-            # Esperar a que ambas tareas terminen
             await asyncio.gather(send_task, receive_task)
 
     async def _send_loop(self):
@@ -107,15 +116,21 @@ class CustomWebsocketClient:
                 message = await self.websocket.recv()
                 data = json.loads(message)
                 
-                # Manejar eventos de estado
-                if 'event' in data:
-                    await self._handle_state_event(data)
-                # Manejar respuestas a comandos
-                elif 'id' in data and data['id'] in self.pending_responses:
-                    self.pending_responses[data['id']].set_result(data)
+                if 'type' in data:
+                    if data['type'] == 'event':
+                        await self._handle_state_event(data)
+                    elif data['type'] == 'result':
+                        # Manejar respuestas a comandos
+                        if 'id' in data and data['id'] in self.pending_responses:
+                            self.pending_responses[data['id']].set_result(data)
+                    else:
+                        print(f"Received unknown message type: {data}")
 
             except Exception as e:
                 print(f"Error in receive loop: {e}")
+                if not self.websocket.open:
+                    print("WebSocket connection lost")
+                    break
 
     async def _handle_state_event(self, data):
         try:
