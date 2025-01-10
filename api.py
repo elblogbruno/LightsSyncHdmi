@@ -93,7 +93,7 @@ class CustomWebsocketClient:
 
     async def init_socket(self):
         self._running = True
-        self.loop = asyncio.get_running_loop()
+        self.loop = asyncio.get_event_loop()
         self.outgoing_queue = asyncio.Queue()
 
         try:
@@ -178,24 +178,30 @@ class CustomWebsocketClient:
             pass
 
     async def send_command(self, message):
-        self._msg_id_counter += 1
-        msg_id = self._msg_id_counter
-        message['id'] = msg_id
-        
+        if not self.loop or not self.websocket:
+            print("No active connection")
+            return None
+
         try:
-            # Crear un Future en el loop actual
-            future = self.loop.create_future()
+            self._msg_id_counter += 1
+            msg_id = self._msg_id_counter
+            message['id'] = msg_id
+            
+            # Crear el future en el loop actual
+            future = asyncio.Future(loop=self.loop)
             self.pending_responses[msg_id] = future
             
             # Enviar mensaje
             await self.outgoing_queue.put(message)
             
             # Esperar respuesta con timeout
-            response = await asyncio.wait_for(future, timeout=5.0)
-            return response
-        except asyncio.TimeoutError:
-            print(f"Timeout waiting for response to message {msg_id}")
-            return None
+            try:
+                response = await asyncio.wait_for(future, timeout=5.0)
+                return response
+            except asyncio.TimeoutError:
+                print(f"Timeout waiting for response to message {msg_id}")
+                return None
+
         except Exception as e:
             print(f"Error sending command: {e}")
             return None
