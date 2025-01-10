@@ -90,11 +90,13 @@ class CustomWebsocketClient:
         self.outgoing_queue = None
         self.pending_responses = {}  # Inicializar el diccionario aquí
         self._msg_id_counter = 1  # También inicializamos el contador de mensajes
+        self.current_loop = None  # Añadir referencia al loop actual
+        self.main_loop = None  # Almacenar el loop principal
 
-    async def init_socket(self, loop):
+    async def init_socket(self, loop=None):
         self._running = True
-        self.loop = loop
-        self.outgoing_queue = asyncio.Queue()
+        self.main_loop = loop or asyncio.get_running_loop()
+        self.outgoing_queue = asyncio.Queue(loop=self.main_loop)  # Especificar loop para la cola
 
         try:
             async with websockets.connect(self.host) as websocket:
@@ -178,7 +180,7 @@ class CustomWebsocketClient:
             pass
 
     async def send_command(self, message):
-        if not self.loop or not self.websocket:
+        if not self.websocket:
             print("No active connection")
             return None
 
@@ -187,24 +189,26 @@ class CustomWebsocketClient:
             msg_id = self._msg_id_counter
             message['id'] = msg_id
             
-            # Crear el future en el loop actual
-            future = asyncio.Future(loop=self.loop)
-            self.pending_responses[msg_id] = future
-            
-            # Enviar mensaje
-            await self.outgoing_queue.put(message)
-            
-            # Esperar respuesta con timeout
-            try:
-                response = await asyncio.wait_for(future, timeout=5.0)
-                return response
-            except asyncio.TimeoutError:
-                print(f"Timeout waiting for response to message {msg_id}")
-                return None
+            # Usar run_coroutine_threadsafe si estamos en un loop diferente
+            if asyncio.get_running_loop() != self.main_loop:
+                future = asyncio.run_coroutine_threadsafe(
+                    self._send_and_wait(message, msg_id),
+                    self.main_loop
+                )
+                return future.result(timeout=5.0)
+            else:
+                return await self._send_and_wait(message, msg_id)
 
         except Exception as e:
             print(f"Error sending command: {e}")
             return None
+
+    async def _send_and_wait(self, message, msg_id):
+        try:
+            future = self.main_loop.create_future()
+            self.pending_responses[msg_id] = future
+            await self.outgoing_queue.put(message)
+            return await asyncio.wait_for(future, timeout=5.0)
         finally:
             self.pending_responses.pop(msg_id, None)
 
