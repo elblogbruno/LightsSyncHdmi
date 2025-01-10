@@ -323,6 +323,7 @@ async def run_video_capture_async():
                         print("Failed to grab frame")
                         frame_grab_success = False
                         error_occurred = True
+                        continue
                     else:
                         frame_grab_success = True
                         error_occurred = False
