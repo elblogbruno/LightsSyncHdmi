@@ -156,6 +156,8 @@ class CustomWebsocketClient:
                 try:
                     message = await self.websocket.recv()
                     data = json.loads(message)
+
+                    print(f"Received: {data}")
                     
                     if 'type' in data:
                         if data['type'] == 'event':
