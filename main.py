@@ -23,12 +23,13 @@ print("Starting the script...")
 
 start_time = time.time()
 cap = cv2.VideoCapture(0)
-if os.cpu_count() < 4:
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+#if os.cpu_count() < 4:
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
 if not cap.isOpened():
     print("Error: Could not open camera.")
+    exit()
 else:
     print(f"Camera opened in {time.time() - start_time:.2f} seconds")
 
