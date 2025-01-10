@@ -263,7 +263,7 @@ def run_websocket_client():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(api_client_websocket.init_socket())
+        loop.run_until_complete(api_client_websocket.init_socket(loop))
     finally:
         loop.close()
 

@@ -91,9 +91,9 @@ class CustomWebsocketClient:
         self.pending_responses = {}  # Inicializar el diccionario aquí
         self._msg_id_counter = 1  # También inicializamos el contador de mensajes
 
-    async def init_socket(self):
+    async def init_socket(self, loop):
         self._running = True
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop
         self.outgoing_queue = asyncio.Queue()
 
         try:
