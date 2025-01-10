@@ -104,6 +104,31 @@ class CustomWebsocketClient:
                 print(f"Initialized state for {entity_id}: {state}")
                 print(f"Current status dict: {self.entities_status}")
 
+    async def _fetch_initial_states(self):
+        """Fetch initial states for all entities"""
+        print("Fetching initial states...")
+        for entity_id in self.entities:
+            message = {
+                "id": self._msg_id_counter,
+                "type": "get_states",
+                "entity_ids": [entity_id]
+            }
+            self._msg_id_counter += 1
+            
+            try:
+                await self.websocket.send(json.dumps(message))
+                response = await self.websocket.recv()
+                data = json.loads(response)
+                
+                if 'result' in data and len(data['result']) > 0:
+                    state = data['result'][0]['state']
+                    with self._status_lock:
+                        self.entities_status[entity_id] = state
+                        if self._debug:
+                            print(f"Initial state for {entity_id}: {state}")
+            except Exception as e:
+                print(f"Error fetching initial state for {entity_id}: {e}")
+
     async def init_socket(self, loop=None):
         self._running = True
         self.main_loop = loop or asyncio.get_running_loop()
@@ -113,8 +138,9 @@ class CustomWebsocketClient:
             async with websockets.connect(self.host) as websocket:
                 self.websocket = websocket
 
-                # Auth
+                # Auth y fetch initial states
                 await self._authenticate()
+                await self._fetch_initial_states()  # Añadir esta línea
                 await self._subscribe_to_events()
                 
                 # Start tasks
