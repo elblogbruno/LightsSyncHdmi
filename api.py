@@ -88,6 +88,8 @@ class CustomWebsocketClient:
         self._tasks = []
         self.loop = None
         self.outgoing_queue = None
+        self.pending_responses = {}  # Inicializar el diccionario aquí
+        self._msg_id_counter = 1  # También inicializamos el contador de mensajes
 
     async def init_socket(self):
         self._running = True
@@ -176,26 +178,27 @@ class CustomWebsocketClient:
             pass
 
     async def send_command(self, message):
-        if not hasattr(self, '_msg_id_counter'):
-            self._msg_id_counter = 2
-        else:
-            self._msg_id_counter += 1
+        self._msg_id_counter += 1
         msg_id = self._msg_id_counter
         message['id'] = msg_id
         
-        # Crear un Future para la respuesta
-        future = asyncio.get_event_loop().create_future()
-        self.pending_responses[msg_id] = future
-        
-        # Enviar mensaje
-        await self.outgoing_queue.put(message)
-        
-        # Esperar respuesta con timeout
         try:
+            # Crear un Future en el loop actual
+            future = self.loop.create_future()
+            self.pending_responses[msg_id] = future
+            
+            # Enviar mensaje
+            await self.outgoing_queue.put(message)
+            
+            # Esperar respuesta con timeout
             response = await asyncio.wait_for(future, timeout=5.0)
             return response
         except asyncio.TimeoutError:
             print(f"Timeout waiting for response to message {msg_id}")
+            return None
+        except Exception as e:
+            print(f"Error sending command: {e}")
+            return None
         finally:
             self.pending_responses.pop(msg_id, None)
 
