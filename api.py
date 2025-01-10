@@ -96,6 +96,14 @@ class CustomWebsocketClient:
         self._status_lock = Lock()
         self._debug = True  # Para ayudar a diagnosticar actualizaciones de estado
 
+    def set_initial_state(self, entity_id, state):
+        """Set initial state for an entity before websocket connection"""
+        with self._status_lock:
+            self.entities_status[entity_id] = state
+            if self._debug:
+                print(f"Initialized state for {entity_id}: {state}")
+                print(f"Current status dict: {self.entities_status}")
+
     async def init_socket(self, loop=None):
         self._running = True
         self.main_loop = loop or asyncio.get_running_loop()

@@ -5,6 +5,7 @@ import os
 import dotenv
 import time
 import threading
+import argparse
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,8 +55,25 @@ entities = [
     light_entity_id,
     media_player_entity_id
 ]
-api_client_websocket = CustomWebsocketClient(os.environ['HASSIO_HOST_WEBSOCKET'], os.environ['HASSIO_TOKEN'], entities=entities)
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Smart Room Control')
+    parser.add_argument('--entity', help='Entity ID to set initial state')
+    parser.add_argument('--status', help='Initial state for the entity')
+    return parser.parse_args()
+
+# Initialize websocket client with command line arguments
+api_client_websocket = CustomWebsocketClient(
+    os.environ['HASSIO_HOST_WEBSOCKET'], 
+    os.environ['HASSIO_TOKEN'], 
+    entities=entities
+)
+
+# Process command line arguments
+args = parse_args()
+if args.entity and args.status:
+    api_client_websocket.set_initial_state(args.entity, args.status)
+    print(f"Initialized {args.entity} with state: {args.status}")
 
 app = FastAPI()
 
