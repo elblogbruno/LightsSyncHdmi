@@ -71,7 +71,9 @@ app.add_middleware(
 templates = Jinja2Templates(directory="templates")
 
 def is_tv_on():
-    return api_client_websocket.entities_status.get(media_player_entity_id) == "on"
+    state = api_client_websocket.get_entity_state(media_player_entity_id)
+    print(f"TV state check: {state}")  # Debug
+    return state == "on"
 
 async def turn_on_light(count=0):
     if count >= 3:

@@ -1,6 +1,7 @@
 from requests import get, post
 from asyncio import Queue
 import uuid
+from threading import Lock
 
 class CustomAPIClient:
     def __init__(self, host, token):
@@ -92,6 +93,8 @@ class CustomWebsocketClient:
         self._msg_id_counter = 1  # También inicializamos el contador de mensajes
         self.current_loop = None  # Añadir referencia al loop actual
         self.main_loop = None  # Almacenar el loop principal
+        self._status_lock = Lock()
+        self._debug = True  # Para ayudar a diagnosticar actualizaciones de estado
 
     async def init_socket(self, loop=None):
         self._running = True
@@ -157,7 +160,7 @@ class CustomWebsocketClient:
                     message = await self.websocket.recv()
                     data = json.loads(message)
 
-                    print(f"Received: {data}")
+                    # print(f"Received: {data}")
                     
                     if 'type' in data:
                         if data['type'] == 'event':
@@ -175,11 +178,26 @@ class CustomWebsocketClient:
         try:
             entity_data = data['event']['data']
             entity_id = entity_data['entity_id']
+            new_state = entity_data['new_state']['state']
+            
             if entity_id in self.entities:
-                print(f"Entity: {entity_id} - State: {entity_data['new_state']['state']}")
-                self.entities_status[entity_id] = entity_data['new_state']['state']
-        except Exception:
-            pass
+                with self._status_lock:
+                    self.entities_status[entity_id] = new_state
+                    if self._debug:
+                        print(f"State updated - Entity: {entity_id} - New State: {new_state}")
+                        print(f"Updated status dict: {self.entities_status}")
+        except Exception as e:
+            print(f"Error handling state event: {e}")
+            if self._debug:
+                print(f"Problematic data: {data}")
+
+    def get_entity_state(self, entity_id):
+        with self._status_lock:
+            state = self.entities_status.get(entity_id)
+            if self._debug:
+                print(f"Getting state for {entity_id}: {state}")
+                print(f"Current status dict: {self.entities_status}")
+            return state
 
     async def send_command(self, message):
         if not self.websocket:
