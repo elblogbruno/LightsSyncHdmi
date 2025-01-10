@@ -86,14 +86,17 @@ class CustomWebsocketClient:
         self.websocket = None
         self._running = False
         self._tasks = []
-        self.loop_context = LoopContext()
+        self.loop = None
+        self.outgoing_queue = None
 
     async def init_socket(self):
         self._running = True
+        self.loop = asyncio.get_running_loop()
+        self.outgoing_queue = asyncio.Queue()
+
         try:
             async with websockets.connect(self.host) as websocket:
                 self.websocket = websocket
-                self.outgoing_queue = asyncio.Queue()  # Create queue in current loop
 
                 # Auth
                 await self._authenticate()

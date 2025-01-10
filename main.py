@@ -259,7 +259,23 @@ def run_flask():
     import uvicorn
     uvicorn.run(app, host='0.0.0.0', port=5000)
 
-async def run_video_capture():
+def run_websocket_client():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(api_client_websocket.init_socket())
+    finally:
+        loop.close()
+
+def run_video_capture():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_video_capture_async())
+    finally:
+        loop.close()
+
+async def run_video_capture_async():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
     while True:
         try:
@@ -351,25 +367,15 @@ def run_async_thread(coroutine):
     finally:
         loop.close()
 
-def run_websocket_client():
-    with api_client_websocket.loop_context as loop:
-        loop.run_until_complete(api_client_websocket.init_socket())
-
 if __name__ == '__main__':
     frame_grab_success = False
     updating_colors = False
     error_occurred = False
     skipped_frames = 0
 
-    def create_video_thread():
-        return threading.Thread(target=run_async_thread, args=(run_video_capture(),))
-
-    def create_websocket_thread():
-        return threading.Thread(target=run_websocket_client)
-
     flask_thread = threading.Thread(target=run_flask)
-    video_thread = create_video_thread()
-    websocket_thread = create_websocket_thread()
+    video_thread = threading.Thread(target=run_video_capture)
+    websocket_thread = threading.Thread(target=run_websocket_client)
     
     flask_thread.start()
     video_thread.start()
@@ -383,12 +389,12 @@ if __name__ == '__main__':
 
         if not video_thread.is_alive():
             print("Video capture thread stopped. Restarting...")
-            video_thread = create_video_thread()
+            video_thread = threading.Thread(target=run_video_capture)
             video_thread.start()
 
         if not websocket_thread.is_alive():
             print("Websocket thread stopped. Restarting...")
-            websocket_thread = create_websocket_thread()
+            websocket_thread = threading.Thread(target=run_websocket_client)
             websocket_thread.start()
 
         time.sleep(1)  # Check thread status every second
