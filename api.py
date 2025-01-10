@@ -62,6 +62,21 @@ import asyncio
 import threading
 import json
 
+class LoopContext:
+    def __init__(self):
+        self.loop = None
+        self.previous_loop = None
+
+    def __enter__(self):
+        self.previous_loop = asyncio.get_event_loop()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        return self.loop
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.loop.close()
+        asyncio.set_event_loop(self.previous_loop)
+
 class CustomWebsocketClient: 
     def __init__(self, host_websocket, token, entities):
         self.host = host_websocket
@@ -69,86 +84,64 @@ class CustomWebsocketClient:
         self.entities = entities
         self.entities_status = {}
         self.websocket = None
-        self.outgoing_queue = Queue()
-        self.incoming_queue = Queue()
-        self.pending_responses = {}
         self._running = False
         self._tasks = []
+        self.loop_context = LoopContext()
 
     async def init_socket(self):
         self._running = True
         try:
             async with websockets.connect(self.host) as websocket:
                 self.websocket = websocket
+                self.outgoing_queue = asyncio.Queue()  # Create queue in current loop
 
-                # Autenticación
-                auth_msg = {'type': 'auth', 'access_token': self.token}
-                await self.websocket.send(json.dumps(auth_msg))
+                # Auth
+                await self._authenticate()
+                await self._subscribe_to_events()
                 
-                while True:
-                    auth_response = await self.websocket.recv()
-                    data = json.loads(auth_response)
-                    if data.get('type') == 'auth_ok':
-                        print("Authentication successful")
-                        break
-                    elif data.get('type') == 'auth_invalid':
-                        print("Authentication failed")
-                        return
-
-                # Suscripción a eventos
-                await self.websocket.send(json.dumps({
-                    'id': 1, 
-                    'type': 'subscribe_events',
-                    'event_type': 'state_changed'
-                }))
-
-                print("Subscribed to events")
-
-                # Crear y guardar referencias a las tareas
+                # Start tasks
                 send_task = asyncio.create_task(self._send_loop())
                 receive_task = asyncio.create_task(self._receive_loop())
-                self._tasks = [send_task, receive_task]
-
-                # Esperar a que cualquiera de las tareas termine
-                done, pending = await asyncio.wait(
-                    self._tasks,
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-
-                # Cancelar las tareas pendientes
-                for task in pending:
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+                
+                await asyncio.gather(send_task, receive_task)
 
         except Exception as e:
             print(f"WebSocket connection error: {e}")
         finally:
             self._running = False
             self.websocket = None
-            # Limpiar las colas
-            while not self.outgoing_queue.empty():
-                await self.outgoing_queue.get()
-            while not self.incoming_queue.empty():
-                await self.incoming_queue.get()
+
+    async def _authenticate(self):
+        auth_msg = {'type': 'auth', 'access_token': self.token}
+        await self.websocket.send(json.dumps(auth_msg))
+        
+        while True:
+            response = await self.websocket.recv()
+            data = json.loads(response)
+            if data.get('type') == 'auth_ok':
+                print("Authentication successful")
+                return
+            elif data.get('type') == 'auth_invalid':
+                raise Exception("Authentication failed")
+
+    async def _subscribe_to_events(self):
+        await self.websocket.send(json.dumps({
+            'id': 1,
+            'type': 'subscribe_events',
+            'event_type': 'state_changed'
+        }))
+        print("Subscribed to events")
 
     async def _send_loop(self):
-        try:
-            while self._running:
-                try:
-                    message = await asyncio.wait_for(
-                        self.outgoing_queue.get(), 
-                        timeout=1.0
-                    )
-                    if message is None:
-                        break
-                    await self.websocket.send(json.dumps(message))
-                except asyncio.TimeoutError:
-                    continue
-        except Exception as e:
-            print(f"Send loop error: {e}")
+        while self._running and self.websocket:
+            try:
+                message = await self.outgoing_queue.get()
+                if message is None:
+                    break
+                await self.websocket.send(json.dumps(message))
+            except Exception as e:
+                print(f"Send error: {e}")
+                break
 
     async def _receive_loop(self):
         try:

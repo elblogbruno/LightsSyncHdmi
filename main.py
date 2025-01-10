@@ -343,15 +343,34 @@ def get_dominant_color(frame, prev_dominant_color):
     else:
         return prev_dominant_color
 
+def run_async_thread(coroutine):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coroutine)
+    finally:
+        loop.close()
+
+def run_websocket_client():
+    with api_client_websocket.loop_context as loop:
+        loop.run_until_complete(api_client_websocket.init_socket())
+
 if __name__ == '__main__':
     frame_grab_success = False
     updating_colors = False
     error_occurred = False
     skipped_frames = 0
 
+    def create_video_thread():
+        return threading.Thread(target=run_async_thread, args=(run_video_capture(),))
+
+    def create_websocket_thread():
+        return threading.Thread(target=run_websocket_client)
+
     flask_thread = threading.Thread(target=run_flask)
-    video_thread = threading.Thread(target=asyncio.run, args=(run_video_capture(),))
-    websocket_thread = threading.Thread(target=asyncio.run, args=(api_client_websocket.init_socket(),))
+    video_thread = create_video_thread()
+    websocket_thread = create_websocket_thread()
+    
     flask_thread.start()
     video_thread.start()
     websocket_thread.start()
@@ -364,12 +383,12 @@ if __name__ == '__main__':
 
         if not video_thread.is_alive():
             print("Video capture thread stopped. Restarting...")
-            video_thread = threading.Thread(target=asyncio.run, args=(run_video_capture(),))
+            video_thread = create_video_thread()
             video_thread.start()
 
         if not websocket_thread.is_alive():
             print("Websocket thread stopped. Restarting...")
-            websocket_thread = threading.Thread(target=asyncio.run, args=(api_client_websocket.init_socket(),))
+            websocket_thread = create_websocket_thread()
             websocket_thread.start()
 
         time.sleep(1)  # Check thread status every second
