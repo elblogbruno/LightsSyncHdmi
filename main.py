@@ -20,17 +20,16 @@ import asyncio
 dotenv.load_dotenv()
 
 print("Starting the script...")
+cap = cv2.VideoCapture(0)
 
-start_time = time.time()
-cap = cv2.VideoCapture(0) # Open the default camera
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
+print("Video capture object created...")
+
 if not cap.isOpened():
-    print("Error: Could not open camera.")
+    print("Error: Could not open video source.")
     exit()
-else:
-    print(f"Camera opened in {time.time() - start_time:.2f} seconds")
 
 print("Video capture object created...")
 
