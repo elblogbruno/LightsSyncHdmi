@@ -315,7 +315,8 @@ def run_video_capture():
 
 async def run_video_capture_async():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
-    tv_was_off = False  # Add this flag
+    tv_was_off = False
+    skipped_frames = 0  # Reset skipped_frames at start
     
     while True:
         try:
@@ -326,20 +327,23 @@ async def run_video_capture_async():
 
             # Check TV state and handle light once
             if not is_tv_on():
-                if not tv_was_off:  # Only turn off lights if TV just turned off
+                if not tv_was_off:
                     print("Samsung TV is off. Turning off lights...")
                     await turn_off_light()
                     tv_was_off = True
+                    skipped_frames = 0  # Reset when TV turns off
                 await asyncio.sleep(1)
                 continue
             else:
-                tv_was_off = False  # Reset flag when TV is on
+                if tv_was_off:  # TV just turned on
+                    skipped_frames = 0  # Reset when TV turns on
+                tv_was_off = False
 
-            # Rest of the video capture loop
             if skipped_frames < 5:
-                print("Skipping frames...")
+                print(f"Skipping frame {skipped_frames + 1}/5...")
                 cap.read()
                 skipped_frames += 1
+                await asyncio.sleep(0.1)  # Small delay between skips
                 continue
 
             ret, frame = cap.read()
