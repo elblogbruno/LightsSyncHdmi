@@ -302,3 +302,22 @@ class CustomWebsocketClient:
         response = await self.send_command(message)
         print(f"Turn off response: {response}")
         return response
+
+    def update_entity(self, old_entity_id, new_entity_id):
+        """Update entity ID and transfer its state if exists"""
+        with self._status_lock:
+            # Get the state of the old entity if it exists
+            old_state = self.entities_status.pop(old_entity_id, None)
+            
+            # Update entities list
+            if old_entity_id in self.entities:
+                self.entities.remove(old_entity_id)
+            self.entities.append(new_entity_id)
+            
+            # Transfer the state or initialize as None
+            self.entities_status[new_entity_id] = old_state
+            
+            if self._debug:
+                print(f"Updated entity: {old_entity_id} -> {new_entity_id}")
+                print(f"New entities list: {self.entities}")
+                print(f"New status dict: {self.entities_status}")

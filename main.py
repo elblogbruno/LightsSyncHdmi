@@ -170,9 +170,27 @@ async def set_update_interval(request: Request):
 async def set_entity_ids(request: Request):
     global light_entity_id, media_player_entity_id
     data = await request.json()
-    light_entity_id = data.get('light_entity_id', light_entity_id)
-    media_player_entity_id = data.get('media_player_entity_id', media_player_entity_id)
-    return JSONResponse({"status": "success", "light_entity_id": light_entity_id, "media_player_entity_id": media_player_entity_id})
+    
+    # Update light entity if provided
+    if 'light_entity_id' in data:
+        old_light_id = light_entity_id
+        light_entity_id = data['light_entity_id']
+        api_client_websocket.update_entity(old_light_id, light_entity_id)
+    
+    # Update media player entity if provided
+    if 'media_player_entity_id' in data:
+        old_media_id = media_player_entity_id
+        media_player_entity_id = data['media_player_entity_id']
+        api_client_websocket.update_entity(old_media_id, media_player_entity_id)
+    
+    # Después de actualizar, intentar obtener los estados iniciales
+    await api_client_websocket._fetch_initial_states()
+    
+    return JSONResponse({
+        "status": "success",
+        "light_entity_id": light_entity_id,
+        "media_player_entity_id": media_player_entity_id
+    })
 
 @app.post("/set_color_algorithm")
 async def set_color_algorithm(request: Request):
