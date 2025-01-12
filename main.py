@@ -19,23 +19,44 @@ import asyncio
 
 dotenv.load_dotenv()
 
+class VideoCapture:
+    def __init__(self, device_id=0):
+        self.cap = cv2.VideoCapture(device_id)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+        self.lock = threading.Lock()
+        self._frame = None
+        self._ret = False
+        
+        # Iniciar thread de captura
+        self.running = True
+        self.thread = threading.Thread(target=self._capture_loop)
+        self.thread.daemon = True
+        self.thread.start()
+    
+    def _capture_loop(self):
+        while self.running:
+            with self.lock:
+                self._ret, self._frame = self.cap.read()
+            time.sleep(0.03)  # ~30 fps
+    
+    def read(self):
+        with self.lock:
+            return self._ret, self._frame.copy() if self._frame is not None else None
+    
+    def release(self):
+        self.running = False
+        self.thread.join()
+        self.cap.release()
+
 print("Starting the script...")
-cap = cv2.VideoCapture(0)
+cap = VideoCapture(0)
 
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-
-print("Video capture object created...")
-
-if not cap.isOpened():
+if not cap.cap.isOpened():
     print("Error: Could not open video source.")
     exit()
 
 print("Video capture object created...")
-
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
 
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
@@ -341,27 +362,22 @@ async def run_video_capture_async():
 
             if skipped_frames < 5:
                 print(f"Skipping frame {skipped_frames + 1}/5...")
-                cap.read()
+                ret, _ = cap.read()
                 skipped_frames += 1
                 await asyncio.sleep(0.1)  # Small delay between skips
                 continue
 
-            try:
-                ret, frame = cap.read()
+            ret, frame = cap.read()
 
-                if not ret:
-                    print("Failed to grab frame")
-                    frame_grab_success = False
-                    error_occurred = True
-                    continue
-                else:
-                    frame_grab_success = True
-                    error_occurred = False
-            except Exception as e:
-                print(f"Error during frame capture: {e}")
+            if not ret or frame is None:
+                print("Failed to grab frame")
                 frame_grab_success = False
                 error_occurred = True
+                await asyncio.sleep(0.1)
                 continue
+            else:
+                frame_grab_success = True
+                error_occurred = False
 
             current_frame = frame
 
