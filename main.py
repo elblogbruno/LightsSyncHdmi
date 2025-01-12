@@ -266,8 +266,26 @@ async def random_frame():
     if current_frame is None:
         return JSONResponse(content={"message": "Frame not found"}, status_code=404)
     
-    random_frame_encoded = cv2.imencode('.jpg', current_frame)[1].tobytes()
-    return StreamingResponse(io.BytesIO(random_frame_encoded), media_type="image/jpeg")
+    try:
+        # Hacer una copia del frame para evitar problemas de concurrencia
+        frame_copy = current_frame.copy()
+        # Añadir timestamp al frame para evitar caché
+        cv2.putText(frame_copy, str(time.time())[:10], (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        random_frame_encoded = cv2.imencode('.jpg', frame_copy)[1].tobytes()
+        return StreamingResponse(
+            io.BytesIO(random_frame_encoded), 
+            media_type="image/jpeg",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    except Exception as e:
+        print(f"Error encoding frame: {e}")
+        return JSONResponse(content={"message": "Error encoding frame"}, status_code=500)
 
 @app.post("/restart_flask_thread")
 async def restart_flask_thread():

@@ -271,15 +271,19 @@
 
             function refreshFrame() {
                 const img = document.getElementById('random-frame');
-                img.src = '/random_frame?' + new Date().getTime();
+                const timestamp = new Date().getTime();
+                img.src = '/random_frame?' + timestamp;  // Añadir timestamp único
                 img.onerror = function() {
                     $('#frame-error').show();
+                    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Clear image
                 };
                 img.onload = function() {
                     $('#frame-error').hide();
                 };
             }
-            setInterval(refreshFrame, 5000);
+            
+            // Actualizar más frecuentemente
+            setInterval(refreshFrame, 1000); // Cambiar a 1 segundo en lugar de 5
         });
     </script>
 </body>
