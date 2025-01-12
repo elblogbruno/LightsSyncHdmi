@@ -346,16 +346,22 @@ async def run_video_capture_async():
                 await asyncio.sleep(0.1)  # Small delay between skips
                 continue
 
-            ret, frame = cap.read()
+            try:
+                ret, frame = cap.read()
 
-            if not ret:
-                print("Failed to grab frame")
+                if not ret:
+                    print("Failed to grab frame")
+                    frame_grab_success = False
+                    error_occurred = True
+                    continue
+                else:
+                    frame_grab_success = True
+                    error_occurred = False
+            except Exception as e:
+                print(f"Error during frame capture: {e}")
                 frame_grab_success = False
                 error_occurred = True
                 continue
-            else:
-                frame_grab_success = True
-                error_occurred = False
 
             current_frame = frame
 
