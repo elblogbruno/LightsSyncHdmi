@@ -13,7 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 from api import CustomAPIClient, CustomWebsocketClient
 from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+# from fastapi.staticfiles import StaticFiles
 
 import asyncio
 
@@ -22,8 +22,7 @@ dotenv.load_dotenv()
 print("Starting the script...")
 
 start_time = time.time()
-cap = cv2.VideoCapture(0)
-#if os.cpu_count() < 4:
+cap = cv2.VideoCapture(0) # Open the default camera
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
@@ -298,76 +297,80 @@ def run_video_capture():
 
 async def run_video_capture_async():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
+    tv_was_off = False  # Add this flag
+    
     while True:
         try:
             frame_grab_success = False
             updating_colors = False
             error_occurred = False
             current_frame = None
-            while True:
+
+            # Check TV state and handle light once
+            if not is_tv_on():
+                if not tv_was_off:  # Only turn off lights if TV just turned off
+                    print("Samsung TV is off. Turning off lights...")
+                    await turn_off_light()
+                    tv_was_off = True
+                await asyncio.sleep(1)
+                continue
+            else:
+                tv_was_off = False  # Reset flag when TV is on
+
+            # Rest of the video capture loop
+            if skipped_frames < 5:
+                print("Skipping frames...")
+                cap.read()
+                skipped_frames += 1
+                continue
+
+            ret, frame = cap.read()
+
+            if not ret:
+                print("Failed to grab frame")
+                frame_grab_success = False
+                error_occurred = True
+                continue
+            else:
+                frame_grab_success = True
+                error_occurred = False
+
+            current_frame = frame
+
+            if pause_color_change:
+                print("Color change is paused.")
+                await asyncio.sleep(1)
+                continue
+
+            dominant_color = get_dominant_color(frame, prev_dominant_color)
+
+            if time.time() - last_update_time > update_interval:
                 try:
-                    if not is_tv_on():
-                        print("Samsung TV is off. Pausing the script...")
-                        await turn_off_light()
-                        await asyncio.sleep(1)
-                        break
-
-                    if skipped_frames < 5:
-                        print("Skipping frames...")
-                        cap.read()
-                        skipped_frames += 1
-                        continue
-
-                    ret, frame = cap.read()
-
-                    if not ret:
-                        print("Failed to grab frame")
-                        frame_grab_success = False
-                        error_occurred = True
-                        continue
-                    else:
-                        frame_grab_success = True
-                        error_occurred = False
-
-                    current_frame = frame
-
-                    if pause_color_change:
-                        print("Color change is paused.")
-                        await asyncio.sleep(1)
-                        continue
-
-                    dominant_color = get_dominant_color(frame, prev_dominant_color)
-
-                    if time.time() - last_update_time > update_interval:
-                        try:
-                            dominant_color = smooth_color(prev_dominant_color, dominant_color)
-                            brightness = calculate_brightness(dominant_color)
-                            brightness_pct = int((brightness / 255) * 100)
-                            print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-                            ww_values = calculate_ww_values(dominant_color)
-                            await turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
-                            prev_dominant_color = dominant_color
-                            updating_colors = True
-                            error_occurred = False
-                        except Exception as e:
-                            print(f"Error updating LED color: {e}")
-                            updating_colors = False
-                            error_occurred = True
-                        last_update_time = time.time()
-
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break
-
+                    dominant_color = smooth_color(prev_dominant_color, dominant_color)
+                    brightness = calculate_brightness(dominant_color)
+                    brightness_pct = int((brightness / 255) * 100)
+                    print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
+                    ww_values = calculate_ww_values(dominant_color)
+                    await turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
+                    prev_dominant_color = dominant_color
+                    updating_colors = True
+                    error_occurred = False
                 except Exception as e:
-                    print(f"Unexpected error in video capture loop: {e}")
+                    print(f"Error updating LED color: {e}")
+                    updating_colors = False
                     error_occurred = True
-                    await asyncio.sleep(1)
+                last_update_time = time.time()
 
-            cap.release()
-            cv2.destroyAllWindows()
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
         except Exception as e:
-            print(f"Video capture thread encountered an error: {e}")
+            print(f"Unexpected error in video capture loop: {e}")
+            error_occurred = True
             await asyncio.sleep(1)
+
+        cap.release()
+        cv2.destroyAllWindows()
 
 def get_dominant_color(frame, prev_dominant_color):
     if color_algorithm == "kmeans":
