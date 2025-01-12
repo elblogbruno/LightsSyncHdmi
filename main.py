@@ -184,6 +184,7 @@ async def set_entity_ids(request: Request):
         api_client_websocket.update_entity(old_media_id, media_player_entity_id)
     
     # Después de actualizar, intentar obtener los estados iniciales
+    await asyncio.sleep(0.1)  # Ensure no other coroutines are running
     await api_client_websocket._fetch_initial_states()
     
     return JSONResponse({
