@@ -95,6 +95,8 @@ class CustomWebsocketClient:
         self.main_loop = None  # Almacenar el loop principal
         self._status_lock = Lock()
         self._debug = True  # Para ayudar a diagnosticar actualizaciones de estado
+        self._command_queue = asyncio.Queue()
+        self._batch_size = 5  # Número de comandos a procesar en batch
 
     def set_initial_state(self, entity_id, state):
         """Set initial state for an entity before websocket connection"""
@@ -147,8 +149,9 @@ class CustomWebsocketClient:
                 # Start tasks
                 send_task = asyncio.create_task(self._send_loop())
                 receive_task = asyncio.create_task(self._receive_loop())
+                process_commands_task = asyncio.create_task(self._process_commands())
                 
-                await asyncio.gather(send_task, receive_task)
+                await asyncio.gather(send_task, receive_task, process_commands_task)
 
         except Exception as e:
             print(f"WebSocket connection error: {e}")
@@ -321,3 +324,28 @@ class CustomWebsocketClient:
                 print(f"Updated entity: {old_entity_id} -> {new_entity_id}")
                 print(f"New entities list: {self.entities}")
                 print(f"New status dict: {self.entities_status}")
+
+    async def _process_commands(self):
+        while self._running:
+            commands = []
+            try:
+                for _ in range(self._batch_size):
+                    try:
+                        cmd = await asyncio.wait_for(
+                            self._command_queue.get(), 
+                            timeout=0.1
+                        )
+                        commands.append(cmd)
+                    except asyncio.TimeoutError:
+                        break
+                
+                if commands:
+                    # Procesar comandos en batch
+                    await self._send_batch(commands)
+                    
+            except Exception as e:
+                print(f"Error processing commands: {e}")
+
+    async def _send_batch(self, commands):
+        # Implementar lógica de batch para comandos similares
+        pass
