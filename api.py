@@ -175,11 +175,12 @@ class CustomWebsocketClient:
 
     async def _subscribe_to_events(self):
         await self.websocket.send(json.dumps({
-            'id': 1,
+            'id': self._msg_id_counter, 
             'type': 'subscribe_events',
             'event_type': 'state_changed'
         }))
         print("Subscribed to events")
+        self._msg_id_counter += 1
 
     async def _send_loop(self):
         while self._running and self.websocket:
