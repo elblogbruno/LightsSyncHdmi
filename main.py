@@ -361,9 +361,9 @@ async def run_video_capture_async():
         while True:
             try:
                 frame_grab_success = False
-                updating_colors = False
                 error_occurred = False
                 current_frame = None
+                # Note: removed updating_colors = False from here
 
                 # Check TV state and handle light once
                 if not is_tv_on():
@@ -393,6 +393,7 @@ async def run_video_capture_async():
                     print("No new frame available")
                     frame_grab_success = False
                     error_occurred = True
+                    updating_colors = False  # Only set to False if we can't get a frame
                     await asyncio.sleep(0.1)
                     continue
 
@@ -402,10 +403,12 @@ async def run_video_capture_async():
                 current_frame = frame
 
                 if pause_color_change:
+                    updating_colors = False  # Set to False when paused
                     print("Color change is paused.")
                     await asyncio.sleep(1)
                     continue
 
+                # Process frame and update colors
                 dominant_color = get_dominant_color(frame, prev_dominant_color)
 
                 if time.time() - last_update_time > update_interval:
@@ -417,7 +420,7 @@ async def run_video_capture_async():
                         ww_values = calculate_ww_values(dominant_color)
                         await turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
                         prev_dominant_color = dominant_color
-                        updating_colors = True
+                        updating_colors = True  # Set to True after successful update
                         error_occurred = False
                     except Exception as e:
                         print(f"Error updating LED color: {e}")
@@ -431,12 +434,15 @@ async def run_video_capture_async():
             except Exception as e:
                 print(f"Unexpected error in video capture loop: {e}")
                 error_occurred = True
+                updating_colors = False
                 await asyncio.sleep(1)
                 continue  # Continue instead of breaking to maintain the loop
 
     except Exception as e:
         print(f"Fatal error in video capture: {e}")
+        updating_colors = False
     finally:
+        updating_colors = False
         # Solo liberar recursos si hay un error fatal
         if cap is not None:
             cap.release()
