@@ -381,9 +381,10 @@ async def run_video_capture_async():
 
                 if skipped_frames < 5:
                     print(f"Skipping frame {skipped_frames + 1}/5...")
-                    ret, _ = cap.read()
+                    # Corregir la llamada a read() durante el salto de frames
+                    _, _, _ = cap.read()  # Desempaquetar los 3 valores correctamente
                     skipped_frames += 1
-                    await asyncio.sleep(0.1)  # Small delay between skips
+                    await asyncio.sleep(0.1)
                     continue
 
                 ret, frame, frame_time = cap.read()  # Obtener también el timestamp
