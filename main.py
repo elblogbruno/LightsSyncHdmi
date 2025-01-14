@@ -361,9 +361,16 @@ def run_video_capture():
 
 @lru_cache(maxsize=32)
 def calculate_brightness(color):
-    # Convertir el array a una tupla para que sea hashable
-    color_tuple = tuple(color)
-    return np.mean(color_tuple)
+    # Convertir array numpy a lista si es necesario
+    if isinstance(color, np.ndarray):
+        color = color.tolist()
+    
+    # Asegurarse de que tenemos una secuencia de 3 valores RGB
+    if len(color) != 3:
+        raise ValueError("El color debe tener 3 componentes (RGB)")
+        
+    # Fórmula para calcular el brillo percibido
+    return int(0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2])
 
 async def run_video_capture_async():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
