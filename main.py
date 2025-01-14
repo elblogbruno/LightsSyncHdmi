@@ -264,32 +264,35 @@ async def get_feedback():
         "pause_color_change": pause_color_change  # Incluir el estado de pausa
     })
 
-@app.get("/random_frame")
-async def random_frame():
-    global current_frame
-    if current_frame is None:
-        return JSONResponse(content={"message": "Frame not found"}, status_code=404)
-    
-    try:
-        # Hacer una copia del frame para evitar problemas de concurrencia
-        frame_copy = current_frame.copy()
-        # Añadir timestamp al frame para evitar caché
-        cv2.putText(frame_copy, str(time.time())[:10], (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        
-        random_frame_encoded = cv2.imencode('.jpg', frame_copy)[1].tobytes()
-        return StreamingResponse(
-            io.BytesIO(random_frame_encoded), 
-            media_type="image/jpeg",
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0"
-            }
-        )
-    except Exception as e:
-        print(f"Error encoding frame: {e}")
-        return JSONResponse(content={"message": "Error encoding frame"}, status_code=500)
+@app.get("/video_feed")
+async def video_feed():
+    async def generate():
+        while True:
+            if current_frame is not None:
+                frame_copy = current_frame.copy()
+                # Añadir timestamp al frame
+                cv2.putText(frame_copy, str(time.time())[:10], (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
+                # Codificar frame a JPEG
+                _, buffer = cv2.imencode('.jpg', frame_copy)
+                frame_bytes = buffer.tobytes()
+                
+                # Enviar frame en formato multipart
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            
+            await asyncio.sleep(0.033)  # ~30 FPS
+
+    return StreamingResponse(
+        generate(),
+        media_type='multipart/x-mixed-replace; boundary=frame',
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
 
 @app.post("/restart_flask_thread")
 async def restart_flask_thread():

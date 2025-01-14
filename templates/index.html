@@ -60,10 +60,8 @@
         <p>Video Thread Alive: <span id="video_thread_alive"></span></p>
         <p>TV Status: <span id="tv_status"></span></p> <!-- Nueva línea para mostrar el estado de la TV -->
     </div>
-    <div>
-        <h2>Random Frame</h2>
-        <img id="random-frame" src="/random_frame" alt="Random Frame" style="width: 320px; height: 240px;">
-        <p id="frame-error" style="color: red; display: none;">Frame not available</p> <!-- Message for frame not available -->
+    <div class="video-container">
+        <img src="/video_feed" alt="Video Stream" style="max-width: 100%; height: auto;">
     </div>
     <div>
         <h2>Thread Control</h2>
@@ -268,22 +266,6 @@
             socket.onclose = function() {
                 console.log('WebSocket connection closed');
             };
-
-            function refreshFrame() {
-                const img = document.getElementById('random-frame');
-                const timestamp = new Date().getTime();
-                img.src = '/random_frame?' + timestamp;  // Añadir timestamp único
-                img.onerror = function() {
-                    $('#frame-error').show();
-                    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Clear image
-                };
-                img.onload = function() {
-                    $('#frame-error').hide();
-                };
-            }
-            
-            // Actualizar más frecuentemente
-            setInterval(refreshFrame, 1000); // Cambiar a 1 segundo en lugar de 5
         });
     </script>
 </body>
