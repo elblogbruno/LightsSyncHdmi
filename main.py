@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 from api import CustomAPIClient, CustomWebsocketClient
-from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
+from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
 from fastapi.templating import Jinja2Templates
 # from fastapi.staticfiles import StaticFiles
 
@@ -359,7 +359,7 @@ def run_video_capture():
     finally:
         loop.close()
 
-@lru_cache(maxsize=32)
+# @lru_cache(maxsize=32)
 def calculate_brightness(color):
     # Convertir array numpy a lista si es necesario
     if isinstance(color, np.ndarray):
