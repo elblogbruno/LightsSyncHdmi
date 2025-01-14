@@ -481,15 +481,31 @@ if __name__ == '__main__':
     error_occurred = False
     skipped_frames = 0
 
+    # Iniciar primero el websocket y esperar a que se conecte
+    websocket_thread = threading.Thread(target=run_websocket_client)
+    websocket_thread.start()
+    print("Waiting for WebSocket connection...")
+    time.sleep(2)  # Dar tiempo para que se establezca la conexión
+
+    # Verificar el estado inicial de la TV
+    if not is_tv_on():
+        print("TV is off. Starting with lights off...")
+        run_async_thread(turn_off_light())
+    
+    # Luego iniciar los demás servicios
     flask_thread = threading.Thread(target=run_flask)
     video_thread = threading.Thread(target=run_video_capture)
-    websocket_thread = threading.Thread(target=run_websocket_client)
     
     flask_thread.start()
     video_thread.start()
-    websocket_thread.start()
 
     while True:
+        if not websocket_thread.is_alive():
+            print("Websocket thread stopped. Restarting...")
+            websocket_thread = threading.Thread(target=run_websocket_client)
+            websocket_thread.start()
+            time.sleep(2)  # Esperar a que se reconecte
+
         if not flask_thread.is_alive():
             print("Flask thread stopped. Restarting...")
             flask_thread = threading.Thread(target=run_flask)
@@ -500,9 +516,4 @@ if __name__ == '__main__':
             video_thread = threading.Thread(target=run_video_capture)
             video_thread.start()
 
-        if not websocket_thread.is_alive():
-            print("Websocket thread stopped. Restarting...")
-            websocket_thread = threading.Thread(target=run_websocket_client)
-            websocket_thread.start()
-
-        time.sleep(1)  # Check thread status every second
+        time.sleep(1)
