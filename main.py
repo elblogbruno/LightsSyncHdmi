@@ -1,6 +1,6 @@
 import io
 import cv2
-import numpy np
+import numpy as np
 import os
 import dotenv
 import time
