@@ -14,54 +14,49 @@ def calculate_ww_values(color):
     ww_value = int((brightness / 255) * 255)
     return [ww_value, ww_value]
 
-def get_dominant_color_kmeans(frame, prev_dominant_color):
-    blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
-    small_frame = cv2.resize(blurred_frame, (160, 120))  # Reducir aún más la resolución
-
-    height, width, _ = small_frame.shape
-    mask = np.zeros((height, width), dtype=np.uint8)
-    cv2.rectangle(mask, (width//4, height//4), (3*width//4, 3*height//4), 255, -1)
-    masked_frame = cv2.bitwise_and(small_frame, small_frame, mask=mask)
-
-    pixels = masked_frame.reshape((-1, 3))
-    pixels = pixels[np.any(pixels != [0, 0, 0], axis=-1)]
-
+def get_dominant_color_kmeans(frame, prev_color, n_colors=1):
     try:
-        # Convert pixels to HSV color space for better clustering
-        pixels_hsv = cv2.cvtColor(pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
+        # Verificar que el frame no está vacío
+        if frame is None or frame.size == 0:
+            print("Frame vacío detectado, retornando color previo")
+            return prev_color
 
-        kmeans = MiniBatchKMeans(n_clusters=8)  # Reducir el número de clusters
-        kmeans.fit(pixels_hsv)
-        cluster_centers = kmeans.cluster_centers_
-        labels = kmeans.labels_
+        # Verificar las dimensiones del frame
+        if len(frame.shape) != 3:
+            print("Frame inválido (dimensiones incorrectas), retornando color previo")
+            return prev_color
 
-        label_counts = np.bincount(labels)
-        dominant_color_index = np.argmax(label_counts)
+        # Redimensionar frame para procesamiento más rápido
+        small_frame = cv2.resize(frame, (32, 32))
+        
+        try:
+            # Convertir a RGB (si falla, el frame podría estar corrupto)
+            small_frame_rgb = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        except cv2.error as e:
+            print(f"Error al convertir color: {e}")
+            return prev_color
 
-        dominant_color_hsv = cluster_centers[dominant_color_index]
-        min_distance = np.linalg.norm(dominant_color_hsv - cv2.cvtColor(np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV)[0][0])
+        # Reshape para KMeans
+        pixels = small_frame_rgb.reshape(-1, 3)
+        pixels = np.float32(pixels)
 
-        for i, center in enumerate(cluster_centers):
-            distance = np.linalg.norm(center - cv2.cvtColor(np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV)[0][0])
-            if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
-                dominant_color_hsv = center
-                dominant_color_index = i
-                min_distance = distance
+        # Criterios de parada para K-means
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        
+        # Aplicar K-means
+        _, labels, centers = cv2.kmeans(pixels, n_colors, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
 
-        # Convert dominant color back to BGR
-        dominant_color = cv2.cvtColor(np.uint8([[dominant_color_hsv]]), cv2.COLOR_HSV2BGR)[0][0]
-
-        # Fallback mechanism for low saturation or brightness colors
-        if dominant_color_hsv[1] < 50 or dominant_color_hsv[2] < 50:
-            dominant_color = prev_dominant_color
-
-        # convert to rgb
-        dominant_color = dominant_color[::-1]
-
+        # Convertir centros a enteros
+        centers = np.uint8(centers)
+        
+        # Retornar el color dominante
+        dominant_color = centers[0]
+        
         return dominant_color
+
     except Exception as e:
-        print(f"Error during KMeans clustering: {e}")
-        return prev_dominant_color
+        print(f"Error en get_dominant_color_kmeans: {e}")
+        return prev_color
 
 def get_dominant_color_average(frame):
     blurred_frame = cv2.GaussianBlur(frame, (15, 15), 0)
