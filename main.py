@@ -1,6 +1,6 @@
 import io
 import cv2
-import numpy as np
+import numpy np
 import os
 import dotenv
 import time
@@ -23,35 +23,85 @@ dotenv.load_dotenv()
 
 class VideoCapture:
     def __init__(self, device_id=0):
-        self.cap = cv2.VideoCapture(device_id)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-        self.cap.set(cv2.CAP_PROP_FPS, 30)  # Forzar 30 FPS
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimizar buffer
+        self.device_id = device_id
         self.lock = threading.Lock()
         self._frame = None
         self._ret = False
+        self.running = True
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 5
+        self.last_frame_time = time.time()
+        self.init_capture()
         
         # Iniciar thread de captura
-        self.running = True
         self.thread = threading.Thread(target=self._capture_loop)
         self.thread.daemon = True
         self.thread.start()
     
+    def init_capture(self):
+        try:
+            self.cap = cv2.VideoCapture(self.device_id)
+            if not self.cap.isOpened():
+                raise Exception("No se pudo abrir la captura de video")
+                
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.reconnect_attempts = 0
+            print("Captura de video inicializada correctamente")
+        except Exception as e:
+            print(f"Error al inicializar captura: {e}")
+            self.reconnect_attempts += 1
+            if self.reconnect_attempts < self.max_reconnect_attempts:
+                print(f"Reintentando... ({self.reconnect_attempts}/{self.max_reconnect_attempts})")
+                time.sleep(2)
+                self.init_capture()
+            else:
+                raise Exception("No se pudo inicializar la captura después de múltiples intentos")
+
     def _capture_loop(self):
         while self.running:
-            with self.lock:
-                self._ret, self._frame = self.cap.read()
+            try:
+                if not self.cap.isOpened():
+                    print("Conexión perdida, reintentando...")
+                    self.init_capture()
+                    continue
+
+                ret, frame = self.cap.read()
+                
+                # Verificar si el frame es válido
+                if ret and frame is not None and frame.size > 0:
+                    with self.lock:
+                        self._ret = ret
+                        self._frame = frame
+                        self.last_frame_time = time.time()
+                else:
+                    # Si no hay frame válido por más de 5 segundos, reiniciar captura
+                    if time.time() - self.last_frame_time > 5:
+                        print("No hay frames válidos por 5 segundos, reiniciando captura...")
+                        self.cap.release()
+                        self.init_capture()
+                        
+            except Exception as e:
+                print(f"Error en capture_loop: {e}")
+                time.sleep(1)
+                continue
+
             time.sleep(0.03)  # ~30 fps
     
     def read(self):
         with self.lock:
+            if time.time() - self.last_frame_time > 5:
+                return False, None
             return self._ret, self._frame.copy() if self._frame is not None else None
     
     def release(self):
         self.running = False
-        self.thread.join()
-        self.cap.release()
+        if self.thread.is_alive():
+            self.thread.join()
+        if hasattr(self, 'cap') and self.cap.isOpened():
+            self.cap.release()
 
 print("Starting the script...")
 cap = VideoCapture(0)
@@ -374,9 +424,9 @@ def calculate_brightness(color):
 
 async def run_video_capture_async():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
-    tv_was_off = False
-    skipped_frames = 0  # Reset skipped_frames at start
-    color_processor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    
+    retry_count = 0
+    max_retries = 3
     
     while True:
         try:
@@ -407,6 +457,22 @@ async def run_video_capture_async():
                 continue
 
             ret, frame = cap.read()
+
+            if not ret or frame is None or frame.size == 0:
+                retry_count += 1
+                print(f"Failed to grab frame (attempt {retry_count}/{max_retries})")
+                if retry_count >= max_retries:
+                    print("Reiniciando captura de video...")
+                    cap.release()
+                    cap = VideoCapture(0)
+                    retry_count = 0
+                frame_grab_success = False
+                error_occurred = True
+                await asyncio.sleep(1)
+                continue
+            
+            retry_count = 0  # Reset contador si el frame es válido
+            # ...existing code...
 
             if not ret or frame is None:
                 print("Failed to grab frame")
