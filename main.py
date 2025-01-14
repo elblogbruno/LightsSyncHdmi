@@ -358,8 +358,9 @@ def run_video_capture():
 
 @lru_cache(maxsize=32)
 def calculate_brightness(color):
-    # Cachear cálculos de brillo
-    return np.mean(color)
+    # Convertir el array a una tupla para que sea hashable
+    color_tuple = tuple(color)
+    return np.mean(color_tuple)
 
 async def run_video_capture_async():
     global prev_dominant_color, last_update_time, skipped_frames, frame_grab_success, updating_colors, error_occurred, current_frame
@@ -429,7 +430,7 @@ async def run_video_capture_async():
                     
                 try:
                     dominant_color = smooth_color(prev_dominant_color, dominant_color)
-                    brightness = calculate_brightness(dominant_color)
+                    brightness = calculate_brightness(tuple(dominant_color))  # Convertir a tupla
                     brightness_pct = int((brightness / 255) * 100)
                     print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
                     ww_values = calculate_ww_values(dominant_color)
