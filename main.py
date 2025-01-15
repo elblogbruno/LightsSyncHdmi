@@ -104,13 +104,6 @@ class VideoCapture:
             self.cap.release()
 
 print("Starting the script...")
-cap = VideoCapture(0)
-
-if not cap.cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
-
-print("Video capture object created...")
 
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
@@ -428,10 +421,17 @@ async def run_video_capture_async():
     
     retry_count = 0
     max_retries = 3
-    tv_was_off = False  # Inicializar la variable aquí
+    tv_was_off = False
     color_processor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     
     try:
+        # Única inicialización de la cámara aquí
+        cap = VideoCapture(0)
+        print("Video capture object created...")
+        
+        if not cap.cap.isOpened():
+            raise Exception("No se pudo abrir la captura de video")
+
         while True:
             try:
                 frame_grab_success = False
@@ -439,7 +439,7 @@ async def run_video_capture_async():
                 error_occurred = False
                 current_frame = None
 
-                # Check TV state and handle light once
+                # Verificar estado de TV y manejar luces
                 if not is_tv_on():
                     if not tv_was_off:
                         print("Samsung TV is off. Turning off lights...")
@@ -457,86 +457,33 @@ async def run_video_capture_async():
                     print(f"Skipping frame {skipped_frames + 1}/5...")
                     ret, _ = cap.read()
                     skipped_frames += 1
-                    await asyncio.sleep(0.1)  # Small delay between skips
-                    continue
-
-                ret, frame = cap.read()
-
-                if not ret or frame is None or frame.size == 0:
-                    retry_count += 1
-                    print(f"Failed to grab frame (attempt {retry_count}/{max_retries})")
-                    if retry_count >= max_retries:
-                        print("Reiniciando captura de video...")
-                        cap.release()
-                        cap = VideoCapture(0)
-                        retry_count = 0
-                    frame_grab_success = False
-                    error_occurred = True
-                    await asyncio.sleep(1)
-                    continue
-                
-                retry_count = 0  # Reset contador si el frame es válido
-                # ...existing code...
-
-                if not ret or frame is None:
-                    print("Failed to grab frame")
-                    frame_grab_success = False
-                    error_occurred = True
                     await asyncio.sleep(0.1)
                     continue
-                else:
-                    frame_grab_success = True
-                    error_occurred = False
 
-                current_frame = frame
-
-                if pause_color_change:
-                    print("Color change is paused.")
-                    await asyncio.sleep(1)
-                    continue
-
-                # Procesar color en thread separado
-                dominant_color = await asyncio.get_event_loop().run_in_executor(
-                    color_processor, 
-                    get_dominant_color,
-                    frame, 
-                    prev_dominant_color
-                )
-
-                if time.time() - last_update_time > update_interval:
-                    # Reducir frecuencia de actualizaciones si no hay cambios significativos
-                    if np.all(np.abs(dominant_color - prev_dominant_color) < 5):
-                        continue
-                        
-                    try:
-                        dominant_color = smooth_color(prev_dominant_color, dominant_color)
-                        brightness = calculate_brightness(tuple(dominant_color))  # Convertir a tupla
-                        brightness_pct = int((brightness / 255) * 100)
-                        print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
-                        ww_values = calculate_ww_values(dominant_color)
-                        await turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
-                        prev_dominant_color = dominant_color
-                        updating_colors = True
-                        error_occurred = False
-                    except Exception as e:
-                        print(f"Error updating LED color: {e}")
-                        updating_colors = False
-                        error_occurred = True
-                    last_update_time = time.time()
-
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                # Resto del código de procesamiento de video
+                # ...existing code...
 
             except Exception as e:
                 print(f"Unexpected error in video capture loop: {e}")
                 error_occurred = True
+                retry_count += 1
+                if retry_count >= max_retries:
+                    print("Reiniciando captura después de múltiples errores...")
+                    if cap is not None:
+                        cap.release()
+                    cap = VideoCapture(0)
+                    retry_count = 0
                 await asyncio.sleep(1)
 
-            cap.release()
-            cv2.destroyAllWindows()
-
+    except Exception as e:
+        print(f"Critical error in video capture: {e}")
+        error_occurred = True
+    
     finally:
         color_processor.shutdown()
+        if cap is not None:
+            cap.release()
+        cv2.destroyAllWindows()
 
 def get_dominant_color(frame, prev_dominant_color):
     if color_algorithm == "kmeans":
