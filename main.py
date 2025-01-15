@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 
 class VideoCapture:
     def __init__(self, device_id=0):
+        self.logger = logging.getLogger(f"{__name__}.VideoCapture")
+
         self.device_id = device_id
         self.lock = threading.Lock()
         self._frame = None
@@ -55,7 +57,6 @@ class VideoCapture:
         self.thread = threading.Thread(target=self._capture_loop)
         self.thread.daemon = True
         self.thread.start()
-        self.logger = logging.getLogger(f"{__name__}.VideoCapture")
     
     def init_capture(self):
         try:
@@ -472,6 +473,8 @@ async def run_video_capture_async():
                         skipped_frames = 0
                     tv_was_off = False
 
+                
+
                 if skipped_frames < 5:
                     logger.info(f"Skipping frame {skipped_frames + 1}/5...")
                     ret, _ = cap.read()
@@ -479,8 +482,55 @@ async def run_video_capture_async():
                     await asyncio.sleep(0.1)
                     continue
 
+                ret, frame = cap.read()
+
+                if not ret or frame is None:
+                    logger.warning("Frame vacío detectado, saltando...")ç
+                    frame_grab_success = False
+                    error_occurred = True
+                    await asyncio.sleep(1)
+                    continue
+                
+                frame_grab_success = True
+                error_occurred = False
+                current_frame = frame
+
                 # Resto del código de procesamiento de video
-                # ...existing code...
+                if pause_color_change:
+                    logger.info("Color change is paused.")
+                    await asyncio.sleep(1)
+                    continue
+
+                # Procesar color en thread separado
+                dominant_color = await asyncio.get_event_loop().run_in_executor(
+                    color_processor, 
+                    get_dominant_color,
+                    frame, 
+                    prev_dominant_color
+                )
+
+                if time.time() - last_update_time > update_interval:
+                    # Reducir frecuencia de actualizaciones si no hay cambios significativos
+                    if np.all(np.abs(dominant_color - prev_dominant_color) < 5):
+                        continue
+                        
+                    try:
+                        dominant_color = smooth_color(prev_dominant_color, dominant_color)
+                        brightness = calculate_brightness(tuple(dominant_color))  # Convertir a tupla
+                        brightness_pct = int((brightness / 255) * 100)
+                        logger.info("Updating LED color  to: %s with brightness: %d%%", dominant_color, brightness_pct)
+                        ww_values = calculate_ww_values(dominant_color)
+                        await turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
+                        prev_dominant_color = dominant_color
+                        updating_colors = True
+                        error_occurred = False
+                    except Exception as e:
+                        logger.info(f"Error updating LED color: {e}")
+                        updating_colors = False
+                        error_occurred = True
+                    last_update_time = time.time()
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
             except Exception as e:
                 logger.error(f"Unexpected error in video capture loop: {e}")
