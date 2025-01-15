@@ -332,13 +332,16 @@ async def video_feed():
     async def generate():
         while True:
             if current_frame is not None:
-                frame_copy = current_frame.copy()
-                # Añadir timestamp al frame
-                cv2.putText(frame_copy, str(time.time())[:10], (10, 30), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                # Reducir la resolución
+                small_frame = cv2.resize(current_frame, (426, 240))  # 240p
                 
-                # Codificar frame a JPEG
-                _, buffer = cv2.imencode('.jpg', frame_copy)
+                # Añadir timestamp
+                cv2.putText(small_frame, str(time.time())[:10], (10, 20), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                
+                # Comprimir con mayor ratio
+                encode_params = [cv2.IMWRITE_JPEG_QUALITY, 70]  # Calidad JPEG reducida
+                _, buffer = cv2.imencode('.jpg', small_frame, encode_params)
                 frame_bytes = buffer.tobytes()
                 
                 # Enviar frame en formato multipart
