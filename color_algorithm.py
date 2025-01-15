@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
+import logging
+
+logger = logging.getLogger(__name__)
 
 def smooth_color(prev_color, new_color, factor=0.1):
     return prev_color * (1 - factor) + new_color * factor
@@ -18,12 +21,12 @@ def get_dominant_color_kmeans(frame, prev_color, n_colors=1):
     try:
         # Verificar que el frame no está vacío
         if frame is None or frame.size == 0:
-            print("Frame vacío detectado, retornando color previo")
+            logger.warning("Frame vacío detectado, retornando color previo")
             return prev_color
 
         # Verificar las dimensiones del frame
         if len(frame.shape) != 3:
-            print("Frame inválido (dimensiones incorrectas), retornando color previo")
+            logger.warning("Frame inválido (dimensiones incorrectas), retornando color previo")
             return prev_color
 
         # Redimensionar frame para procesamiento más rápido
@@ -33,7 +36,7 @@ def get_dominant_color_kmeans(frame, prev_color, n_colors=1):
             # Convertir a RGB (si falla, el frame podría estar corrupto)
             small_frame_rgb = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
         except cv2.error as e:
-            print(f"Error al convertir color: {e}")
+            logger.error(f"Error al convertir color: {e}")
             return prev_color
 
         # Reshape para KMeans
@@ -55,7 +58,7 @@ def get_dominant_color_kmeans(frame, prev_color, n_colors=1):
         return dominant_color
 
     except Exception as e:
-        print(f"Error en get_dominant_color_kmeans: {e}")
+        logger.error(f"Error en get_dominant_color_kmeans: {e}")
         return prev_color
 
 def get_dominant_color_average(frame):

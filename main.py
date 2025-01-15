@@ -18,8 +18,26 @@ from fastapi.templating import Jinja2Templates
 import asyncio
 import concurrent.futures
 from functools import lru_cache
+import logging
+from datetime import datetime
 
 dotenv.load_dotenv()
+
+# Configurar logging
+log_directory = "logs"
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+
+log_file = os.path.join(log_directory, f"smartroom_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class VideoCapture:
     def __init__(self, device_id=0):
@@ -37,6 +55,7 @@ class VideoCapture:
         self.thread = threading.Thread(target=self._capture_loop)
         self.thread.daemon = True
         self.thread.start()
+        self.logger = logging.getLogger(f"{__name__}.VideoCapture")
     
     def init_capture(self):
         try:
@@ -49,12 +68,12 @@ class VideoCapture:
             self.cap.set(cv2.CAP_PROP_FPS, 30)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             self.reconnect_attempts = 0
-            print("Captura de video inicializada correctamente")
+            self.logger.info("Captura de video inicializada correctamente")
         except Exception as e:
-            print(f"Error al inicializar captura: {e}")
+            self.logger.error(f"Error al inicializar captura: {e}")
             self.reconnect_attempts += 1
             if self.reconnect_attempts < self.max_reconnect_attempts:
-                print(f"Reintentando... ({self.reconnect_attempts}/{self.max_reconnect_attempts})")
+                self.logger.info(f"Reintentando... ({self.reconnect_attempts}/{self.max_reconnect_attempts})")
                 time.sleep(2)
                 self.init_capture()
             else:
@@ -64,7 +83,7 @@ class VideoCapture:
         while self.running:
             try:
                 if not self.cap.isOpened():
-                    print("Conexión perdida, reintentando...")
+                    self.logger.warning("Conexión perdida, reintentando...")
                     self.init_capture()
                     continue
 
@@ -79,12 +98,12 @@ class VideoCapture:
                 else:
                     # Si no hay frame válido por más de 5 segundos, reiniciar captura
                     if time.time() - self.last_frame_time > 5:
-                        print("No hay frames válidos por 5 segundos, reiniciando captura...")
+                        self.logger.warning("No hay frames válidos por 5 segundos, reiniciando captura...")
                         self.cap.release()
                         self.init_capture()
                         
             except Exception as e:
-                print(f"Error en capture_loop: {e}")
+                self.logger.error(f"Error en capture_loop: {e}")
                 time.sleep(1)
                 continue
 
@@ -103,7 +122,7 @@ class VideoCapture:
         if hasattr(self, 'cap') and self.cap.isOpened():
             self.cap.release()
 
-print("Starting the script...")
+logger.info("Starting the script...")
 
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
@@ -140,7 +159,7 @@ api_client_websocket = CustomWebsocketClient(
 args = parse_args()
 if args.entity and args.status:
     api_client_websocket.set_initial_state(args.entity, args.status)
-    print(f"Initialized {args.entity} with state: {args.status}")
+    logger.info(f"Initialized {args.entity} with state: {args.status}")
 
 app = FastAPI()
 
@@ -157,41 +176,41 @@ templates = Jinja2Templates(directory="templates")
 
 def is_tv_on():
     state = api_client_websocket.get_entity_state(media_player_entity_id)
-    print(f"TV state check: {state}")  # Debug
+    logger.info(f"TV state check: {state}")  # Debug
     return state == "on"
 
 async def turn_on_light(count=0):
     if count >= 3:
-        print("Failed to turn on the light after 3 attempts. Exiting the script...")
+        logger.error("Failed to turn on the light after 3 attempts. Exiting the script...")
         exit()
     try:
         rgb_color = [255, 0, 0]
         await api_client_websocket.turn_on(entity_id=light_entity_id, brightness_pct=100, rgb_color=rgb_color)
     except Exception as e:
-        print(f"Error controlling lights: {e}")
+        logger.error(f"Error controlling lights: {e}")
         await turn_on_light(count+1)
 
 async def turn_off_light(count=0):
     if count >= 3:
-        print("Failed to turn off the light after 3 attempts. Exiting the script...")
+        logger.error("Failed to turn off the light after 3 attempts. Exiting the script...")
         exit()
     try:
         await api_client_websocket.turn_off(entity_id=light_entity_id)
     except Exception as e:
-        print(f"Error turning off lights: {e}")
+        logger.error(f"Error turning off lights: {e}")
         await turn_off_light(count+1)
 
 async def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], count=0):
     if count >= 3:
-        print("Failed to turn on the light after 3 attempts. Exiting the script...")
+        logger.error("Failed to turn on the light after 3 attempts. Exiting the script...")
         return
     
     try:
         rgb_color = target_color
-        print(f"Setting light color to: {rgb_color} with brightness: {brightness_pct}%")
+        logger.info(f"Setting light color to: {rgb_color} with brightness: {brightness_pct}%")
         await api_client_websocket.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgb_color=rgb_color)
     except Exception as e:
-        print(f"Error turning on lights: {e}")
+        logger.error(f"Error turning on lights: {e}")
         await turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
 
 pause_color_change = False
@@ -363,7 +382,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await emit_feedback(websocket)
             await asyncio.sleep(1)
     except WebSocketDisconnect:
-        print("WebSocket disconnected")
+        logger.warning("WebSocket disconnected")
 
 async def emit_feedback(websocket: WebSocket):
     global frame_grab_success, updating_colors, error_occurred, current_frame
@@ -427,7 +446,7 @@ async def run_video_capture_async():
     try:
         # Única inicialización de la cámara aquí
         cap = VideoCapture(0)
-        print("Video capture object created...")
+        logger.info("Video capture object created...")
         
         if not cap.cap.isOpened():
             raise Exception("No se pudo abrir la captura de video")
@@ -442,7 +461,7 @@ async def run_video_capture_async():
                 # Verificar estado de TV y manejar luces
                 if not is_tv_on():
                     if not tv_was_off:
-                        print("Samsung TV is off. Turning off lights...")
+                        logger.info("Samsung TV is off. Turning off lights...")
                         await turn_off_light()
                         tv_was_off = True
                         skipped_frames = 0
@@ -454,7 +473,7 @@ async def run_video_capture_async():
                     tv_was_off = False
 
                 if skipped_frames < 5:
-                    print(f"Skipping frame {skipped_frames + 1}/5...")
+                    logger.info(f"Skipping frame {skipped_frames + 1}/5...")
                     ret, _ = cap.read()
                     skipped_frames += 1
                     await asyncio.sleep(0.1)
@@ -464,11 +483,11 @@ async def run_video_capture_async():
                 # ...existing code...
 
             except Exception as e:
-                print(f"Unexpected error in video capture loop: {e}")
+                logger.error(f"Unexpected error in video capture loop: {e}")
                 error_occurred = True
                 retry_count += 1
                 if retry_count >= max_retries:
-                    print("Reiniciando captura después de múltiples errores...")
+                    logger.warning("Reiniciando captura después de múltiples errores...")
                     if cap is not None:
                         cap.release()
                     cap = VideoCapture(0)
@@ -476,7 +495,7 @@ async def run_video_capture_async():
                 await asyncio.sleep(1)
 
     except Exception as e:
-        print(f"Critical error in video capture: {e}")
+        logger.critical(f"Critical error in video capture: {e}")
         error_occurred = True
     
     finally:
@@ -514,12 +533,12 @@ if __name__ == '__main__':
     # Iniciar primero el websocket y esperar a que se conecte
     websocket_thread = threading.Thread(target=run_websocket_client)
     websocket_thread.start()
-    print("Waiting for WebSocket connection...")
+    logger.info("Waiting for WebSocket connection...")
     time.sleep(2)  # Dar tiempo para que se establezca la conexión
 
     # Verificar el estado inicial de la TV
     if not is_tv_on():
-        print("TV is off. Starting with lights off...")
+        logger.info("TV is off. Starting with lights off...")
         run_async_thread(turn_off_light())
     
     # Luego iniciar los demás servicios
@@ -531,18 +550,18 @@ if __name__ == '__main__':
 
     while True:
         if not websocket_thread.is_alive():
-            print("Websocket thread stopped. Restarting...")
+            logger.warning("Websocket thread stopped. Restarting...")
             websocket_thread = threading.Thread(target=run_websocket_client)
             websocket_thread.start()
             time.sleep(2)  # Esperar a que se reconecte
 
         if not flask_thread.is_alive():
-            print("Flask thread stopped. Restarting...")
+            logger.warning("Flask thread stopped. Restarting...")
             flask_thread = threading.Thread(target=run_flask)
             flask_thread.start()
 
         if not video_thread.is_alive():
-            print("Video capture thread stopped. Restarting...")
+            logger.warning("Video capture thread stopped. Restarting...")
             video_thread = threading.Thread(target=run_video_capture)
             video_thread.start()
 

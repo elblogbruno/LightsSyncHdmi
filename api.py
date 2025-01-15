@@ -1,10 +1,14 @@
+import logging
 from requests import get, post
 from asyncio import Queue
 import uuid
 from threading import Lock
 
+logger = logging.getLogger(__name__)
+
 class CustomAPIClient:
     def __init__(self, host, token):
+        self.logger = logging.getLogger(f"{__name__}.CustomAPIClient")
         self.url = host
         self.headers = {
             "Authorization": "Bearer " + token,
@@ -19,7 +23,7 @@ class CustomAPIClient:
         if response.status_code == 200:
             return response.json()
         else:
-            print(f"Error fetching entity: {response.status_code} - {response.text}")
+            self.logger.error(f"Error fetching entity: {response.status_code} - {response.text}")
             return None
 
     def turn_on(self, entity_id, brightness_pct=100, rgb_color=None):
@@ -35,12 +39,12 @@ class CustomAPIClient:
         try:
             response = post(url, headers=self.headers, json=data)
             if response.status_code == 200:
-                print(f"Light turned on: {response.text}")
+                self.logger.info(f"Light turned on: {response.text}")
             else:
-                print(f"Error turning on light: {response.status_code} - {response.text}")
+                self.logger.error(f"Error turning on light: {response.status_code} - {response.text}")
 
         except Exception as e:
-            print(f"Error turning on light: {e} - {url}")
+            self.logger.error(f"Error turning on light: {e} - {url}")
 
     def turn_off(self, entity_id):
         url = self.url + "/services/light/turn_off"
@@ -51,11 +55,11 @@ class CustomAPIClient:
         try:
             response = post(url, headers=self.headers, json=data)
             if response.status_code == 200:
-                print(f"Light turned off: {response.text}")
+                self.logger.info(f"Light turned off: {response.text}")
             else:
-                print(f"Error turning off light: {response.status_code} - {response.text}")
+                self.logger.error(f"Error turning off light: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"Error turning off light: {e} - {url}")
+            self.logger.error(f"Error turning off light: {e} - {url}")
 
 import time
 import websockets
@@ -80,6 +84,7 @@ class LoopContext:
 
 class CustomWebsocketClient: 
     def __init__(self, host_websocket, token, entities):
+        self.logger = logging.getLogger(f"{__name__}.CustomWebsocketClient")
         self.host = host_websocket
         self.token = token 
         self.entities = entities
@@ -103,12 +108,12 @@ class CustomWebsocketClient:
         with self._status_lock:
             self.entities_status[entity_id] = state
             if self._debug:
-                print(f"Initialized state for {entity_id}: {state}")
+                self.logger.debug(f"Initialized state for {entity_id}: {state}")
                 print(f"Current status dict: {self.entities_status}")
 
     async def _fetch_initial_states(self):
         """Fetch initial states for all entities"""
-        print("Fetching initial states...")
+        self.logger.info("Fetching initial states...")
         message = {
             "id": self._msg_id_counter,
             "type": "get_states"
@@ -128,9 +133,9 @@ class CustomWebsocketClient:
                         with self._status_lock:
                             self.entities_status[entity_id] = state
                             if self._debug:
-                                print(f"Initial state for {entity_id}: {state}")
+                                self.logger.debug(f"Initial state for {entity_id}: {state}")
         except Exception as e:
-            print(f"Error fetching initial states: {e}")
+            self.logger.error(f"Error fetching initial states: {e}")
 
     async def init_socket(self, loop=None):
         self._running = True
@@ -155,7 +160,7 @@ class CustomWebsocketClient:
                 await asyncio.gather(send_task, receive_task, process_task)
 
         except Exception as e:
-            print(f"WebSocket connection error: {e}")
+            self.logger.error(f"WebSocket connection error: {e}")
         finally:
             self._running = False
             self.websocket = None
@@ -168,9 +173,10 @@ class CustomWebsocketClient:
             response = await self.websocket.recv()
             data = json.loads(response)
             if data.get('type') == 'auth_ok':
-                print("Authentication successful")
+                self.logger.info("Authentication successful")
                 return
             elif data.get('type') == 'auth_invalid':
+                self.logger.error("Authentication failed")
                 raise Exception("Authentication failed")
 
     async def _subscribe_to_events(self):
@@ -224,12 +230,12 @@ class CustomWebsocketClient:
                 with self._status_lock:
                     self.entities_status[entity_id] = new_state
                     if self._debug:
-                        print(f"State updated - Entity: {entity_id} - New State: {new_state}")
+                        self.logger.debug(f"State updated - Entity: {entity_id} - New State: {new_state}")
                         print(f"Updated status dict: {self.entities_status}")
         except Exception as e:
-            print(f"Error handling state event: {e}")
+            self.logger.error(f"Error handling state event: {e}")
             if self._debug:
-                print(f"Problematic data: {data}")
+                self.logger.debug(f"Problematic data: {data}")
 
     def get_entity_state(self, entity_id):
         with self._status_lock:
@@ -288,7 +294,7 @@ class CustomWebsocketClient:
             message["service_data"]["rgb_color"] = rgb_color
 
         response = await self.send_command(message)
-        print(f"Turn on response: {response}")
+        self.logger.info(f"Turn on response: {response}")
         return response
 
     async def turn_off(self, entity_id):
@@ -305,7 +311,7 @@ class CustomWebsocketClient:
         }
 
         response = await self.send_command(message)
-        print(f"Turn off response: {response}")
+        self.logger.info(f"Turn off response: {response}")
         return response
 
     def update_entity(self, old_entity_id, new_entity_id):
@@ -323,9 +329,9 @@ class CustomWebsocketClient:
             self.entities_status[new_entity_id] = old_state
             
             if self._debug:
-                print(f"Updated entity: {old_entity_id} -> {new_entity_id}")
-                print(f"New entities list: {self.entities}")
-                print(f"New status dict: {self.entities_status}")
+                self.logger.debug(f"Updated entity: {old_entity_id} -> {new_entity_id}")
+                self.logger.debug(f"New entities list: {self.entities}")
+                self.logger.debug(f"New status dict: {self.entities_status}")
 
     async def _process_commands(self):
         while self._running and self._command_queue:
