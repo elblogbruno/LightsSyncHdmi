@@ -485,7 +485,7 @@ async def run_video_capture_async():
                 ret, frame = cap.read()
 
                 if not ret or frame is None:
-                    logger.warning("Frame vacío detectado, saltando...")ç
+                    logger.warning("Frame vacío detectado, saltando...")
                     frame_grab_success = False
                     error_occurred = True
                     await asyncio.sleep(1)
