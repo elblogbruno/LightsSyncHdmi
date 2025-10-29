@@ -11,22 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 from api import CustomAPIClient
 from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
+from light_controller import LightController
+from video_capture import setup_video_capture
 
 import asyncio
 
 dotenv.load_dotenv()
 
 print("Starting the script...")
-cap = cv2.VideoCapture(0)
-
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+cap = setup_video_capture(device_index=0, frame_width=320, frame_height=240)
 
 print("Video capture object created...")
-
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
 
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
@@ -39,6 +34,7 @@ last_update_time = time.time()
 update_interval = 1.0  # Increased update interval for better performance
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
+light_controller = LightController(api_client, light_entity_id, media_player_entity_id)
 
 app = FastAPI()
 
@@ -50,55 +46,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def is_tv_on(count=0):
-    if count >= 3:
-        print("Failed to check TV state after 3 attempts. Exiting the script...")
-        return False
-    
-    try:
-        tv = api_client.get_entity(entity_id=media_player_entity_id)
-        if not tv:
-            return False
-        
-        print(tv["state"]  + " " +  str(time.time()))
-        return tv["state"] == "on"
-    except Exception as e:
-        print(f"Error checking TV state: {e}")
-        return is_tv_on(count+1)
-    
-def turn_on_light(count=0):
-    if count >= 3:
-        print("Failed to turn on the light after 3 attempts. Exiting the script...")
-        exit()
-    try:
-        rgb_color = [255, 0, 0]
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgb_color=rgb_color)
-    except Exception as e:
-        print(f"Error controlling lights: {e}")
-        turn_on_light(count+1)
-
-def turn_off_light(count=0):
-    if count >= 3:
-        print("Failed to turn off the light after 3 attempts. Exiting the script...")
-        exit()
-    try:
-        api_client.turn_off(entity_id=light_entity_id)
-    except Exception as e:
-        print(f"Error controlling lights: {e}")
-        turn_off_light(count+1)
-
-def turn_on_set_light(target_color, brightness_pct, rgbww_values=[255, 255], count=0):
-    if count >= 3:
-        print("Failed to turn on the light after 3 attempts. Exiting the script...")
-        return
-    
-    try:
-        rgb_color = target_color
-        print(f"Setting light color to: {rgb_color} with brightness: {brightness_pct}%")
-        api_client.turn_on(entity_id=light_entity_id, brightness_pct=brightness_pct, rgb_color=rgb_color)
-    except Exception as e:
-        print(f"Error controlling lights: {e}")
-        turn_on_set_light(target_color, brightness_pct, rgbww_values, count+1)
 
 pause_color_change = False
 
@@ -185,7 +132,7 @@ async def get_feedback():
         "error_occurred": error_occurred,
         "flask_thread_alive": flask_thread.is_alive(),
         "video_thread_alive": video_thread.is_alive(),
-        "tv_status": is_tv_on(),  # Incluir el estado de la TV
+        "tv_status": light_controller.is_tv_on(),  # Use light_controller
         "pause_color_change": pause_color_change  # Incluir el estado de pausa
     })
 
@@ -239,7 +186,7 @@ async def emit_feedback(websocket: WebSocket):
         "error_occurred": error_occurred,
         "flask_thread_alive": flask_thread.is_alive(),
         "video_thread_alive": video_thread.is_alive(),
-        "tv_status": is_tv_on(),  # Incluir el estado de la TV
+        "tv_status": light_controller.is_tv_on(),  # Use light_controller
         "pause_color_change": pause_color_change  # Incluir el estado de pausa
     })
 
@@ -257,9 +204,9 @@ def run_video_capture():
             current_frame = None  # Inicializar la variable 
             while True:
                 try:
-                    if not is_tv_on():
+                    if not light_controller.is_tv_on():
                         print("Samsung TV is off. Pausing the script...")
-                        turn_off_light()
+                        light_controller.turn_off_light()
                         time.sleep(1)
                         continue
 
@@ -297,7 +244,7 @@ def run_video_capture():
                             brightness_pct = int((brightness / 255) * 100)
                             print("Updating LED color to:", dominant_color, "with brightness:", brightness_pct)
                             ww_values = calculate_ww_values(dominant_color)  # Calcular valores WW basados en el color
-                            turn_on_set_light(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
+                            light_controller.set_light_color(dominant_color.astype(int).tolist(), brightness_pct, ww_values)
                             prev_dominant_color = dominant_color
                             updating_colors = True
                             error_occurred = False
