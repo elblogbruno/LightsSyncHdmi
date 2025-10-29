@@ -4,20 +4,13 @@ import os
 import dotenv
 import time
 from homeassistant_api import Client
+from color_algorithm import preprocess_frame, smooth_color
+from video_capture import setup_video_capture
 
 dotenv.load_dotenv()
 
 # Create a VideoCapture object for the capture card (0 for webcam)
-cap = cv2.VideoCapture(0)
-
-# Set frame width and height to a lower resolution for faster processing
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-
-# Check if the camera opened successfully
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
+cap = setup_video_capture(device_index=0, frame_width=320, frame_height=240)
 
 # Parameters for smoothing
 smoothing_factor = 0.1
@@ -84,8 +77,7 @@ with Client(
         dominant_color = palette[np.argmax(counts)]
 
         # Smooth the color transition by blending previous and current dominant colors
-        dominant_color = smoothing_factor * dominant_color + (1 - smoothing_factor) * prev_dominant_color
-        dominant_color = dominant_color.astype(int)  # Convert to integer
+        dominant_color = smooth_color(prev_dominant_color, dominant_color, factor=smoothing_factor)
 
         # Update previous color for the next iteration
         prev_dominant_color = dominant_color

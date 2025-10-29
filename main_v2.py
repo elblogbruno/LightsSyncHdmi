@@ -8,23 +8,15 @@ import webcolors
 
 from api import CustomAPIClient
 from light_controller import LightController
+from video_capture import setup_video_capture
 
 dotenv.load_dotenv()
 
 print("Starting the script...")
 # Create a VideoCapture object for the capture card (0 for webcam)
-cap = cv2.VideoCapture(0)
-
-# Set frame width and height for better color capture
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap = setup_video_capture(device_index=0, frame_width=640, frame_height=480)
 
 print("Video capture object created...")
-
-# Check if the camera opened successfully
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
 
 # Parameters for smoothing
 smoothing_factor = 0.1

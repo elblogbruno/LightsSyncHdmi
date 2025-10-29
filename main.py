@@ -12,22 +12,16 @@ from starlette.websockets import WebSocketDisconnect
 from api import CustomAPIClient
 from color_algorithm import get_dominant_color_average, get_dominant_color_kmeans, smooth_color, calculate_brightness, get_dominant_color_median, get_dominant_color_mode, calculate_ww_values
 from light_controller import LightController
+from video_capture import setup_video_capture
 
 import asyncio
 
 dotenv.load_dotenv()
 
 print("Starting the script...")
-cap = cv2.VideoCapture(0)
-
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)  # Reduced frame size
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+cap = setup_video_capture(device_index=0, frame_width=320, frame_height=240)
 
 print("Video capture object created...")
-
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
 
 smoothing_factor = 0.05
 prev_dominant_color = np.array([255, 255, 255])
