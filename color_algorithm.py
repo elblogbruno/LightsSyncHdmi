@@ -17,12 +17,12 @@ def calculate_ww_values(color):
 def preprocess_frame(frame, target_size=(320, 240), blur_kernel=(15, 15)):
     """
     Preprocess frame with Gaussian blur and resizing.
-    
+
     Args:
         frame: Input frame
         target_size: Target size for resizing (width, height)
         blur_kernel: Kernel size for Gaussian blur
-    
+
     Returns:
         Preprocessed frame
     """
@@ -54,11 +54,19 @@ def get_dominant_color_kmeans(frame, prev_dominant_color):
         dominant_color_index = np.argmax(label_counts)
 
         dominant_color_hsv = cluster_centers[dominant_color_index]
-        min_distance = np.linalg.norm(dominant_color_hsv - cv2.cvtColor(np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV)[0][0])
+        prev_color_hsv = cv2.cvtColor(
+            np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV
+        )[0][0]
+        min_distance = np.linalg.norm(dominant_color_hsv - prev_color_hsv)
 
         for i, center in enumerate(cluster_centers):
-            distance = np.linalg.norm(center - cv2.cvtColor(np.uint8([[prev_dominant_color]]), cv2.COLOR_BGR2HSV)[0][0])
-            if label_counts[i] > label_counts[dominant_color_index] or (label_counts[i] == label_counts[dominant_color_index] and distance < min_distance):
+            distance = np.linalg.norm(center - prev_color_hsv)
+            is_larger_count = label_counts[i] > label_counts[dominant_color_index]
+            is_same_count_closer = (
+                label_counts[i] == label_counts[dominant_color_index]
+                and distance < min_distance
+            )
+            if is_larger_count or is_same_count_closer:
                 dominant_color_hsv = center
                 dominant_color_index = i
                 min_distance = distance

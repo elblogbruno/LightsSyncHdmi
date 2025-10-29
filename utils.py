@@ -6,11 +6,11 @@ import time
 def retry_on_error(max_attempts=3, delay=0):
     """
     Decorator to retry a function on exception.
-    
+
     Args:
         max_attempts: Maximum number of retry attempts
         delay: Delay between retries in seconds
-    
+
     Returns:
         The decorated function that will retry on error
     """
@@ -26,11 +26,12 @@ def retry_on_error(max_attempts=3, delay=0):
                     print(f"Error in {func.__name__} (attempt {attempt + 1}/{max_attempts}): {e}")
                     if attempt < max_attempts - 1 and delay > 0:
                         time.sleep(delay)
-            
+
             # If all retries failed, raise the last exception or print error
             print(f"Failed to execute {func.__name__} after {max_attempts} attempts.")
             if last_exception:
                 raise last_exception
-                
+            return None
+
         return wrapper
     return decorator
