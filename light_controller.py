@@ -1,5 +1,4 @@
 """Light and TV control functions."""
-import time
 from utils import retry_on_error
 
 
@@ -27,6 +26,8 @@ class LightController:
         Returns:
             bool: True if TV is on, False otherwise
         """
+        import time
+
         tv = self.api_client.get_entity(entity_id=self.media_player_entity_id)
         if not tv:
             return False

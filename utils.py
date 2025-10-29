@@ -27,11 +27,12 @@ def retry_on_error(max_attempts=3, delay=0):
                     if attempt < max_attempts - 1 and delay > 0:
                         time.sleep(delay)
 
-            # If all retries failed, raise the last exception or print error
-            print(f"Failed to execute {func.__name__} after {max_attempts} attempts.")
+            # If all retries failed, raise the last exception
+            error_msg = f"Failed to execute {func.__name__} after {max_attempts} attempts."
+            print(error_msg)
             if last_exception:
                 raise last_exception
-            return None
+            raise RuntimeError(error_msg)
 
         return wrapper
     return decorator
