@@ -7,6 +7,7 @@ from homeassistant_api import Client
 import webcolors
 
 from api import CustomAPIClient
+from light_controller import LightController
 
 dotenv.load_dotenv()
 
@@ -40,6 +41,7 @@ frame_counter = 0  # For saving a frame once
 
 
 api_client = CustomAPIClient(os.environ['HASSIO_HOST'], os.environ['HASSIO_TOKEN'])
+light_controller = LightController(api_client, light_entity_id, media_player_entity_id)
 
 # Initialize Home Assistant API client
 try:
@@ -50,68 +52,19 @@ try:
 
     #     light = client.get_domain("light") 
 
-    # Function to check if TV is on
-    def is_tv_on(count=0):
-        if count >= 3:
-            print("Failed to check TV state after 3 attempts. Exiting the script...")
-            return False
-        
-        try:
-            tv = api_client.get_entity(entity_id=media_player_entity_id)  # Replace with your TV entity ID
-            if not tv:
-                return False
-            
-            print(tv["state"]  + " " +  str(time.time()))
-            return tv["state"] == "on"
-        except Exception as e:
-            print(f"Error checking TV state: {e}")
-            # try again
-            return is_tv_on(count+1)
-        
-    def turn_on_light(count=0):
-        if count >= 3:
-            print("Failed to turn on the light after 3 attempts. Exiting the script...")
-            exit()
-        try:
-            rgbww_color = [255, 0, 0, 255, 255]
-            api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgbww_color=rgbww_color)
-        except Exception as e:
-            print(f"Error controlling lights: {e}")
-            # try again
-            turn_on_light(count+1)
-
-    def turn_off_light(count=0):
-        if count >= 3:
-            print("Failed to turn off the light after 3 attempts. Exiting the script...")
-            exit()
-        try:
-            rgbww_color = [0, 0, 0, 0, 0]
-            api_client.turn_on(entity_id=light_entity_id, brightness_pct=0, rgbww_color=rgbww_color)
-        except Exception as e:
-            print(f"Error controlling lights: {e}")
-            # try again
-            turn_off_light(count+1)
-
-    def turn_on_set_light(target_color, count=0):
-        if count >= 3:
-            print("Failed to turn on the light after 3 attempts. Exiting the script...")
-            return
-        
-        try:
-            rgbww_color = target_color + [255, 255]  # Assuming WW values are always max
-            api_client.turn_on(entity_id=light_entity_id, brightness_pct=100, rgbww_color=rgbww_color)
-        except Exception as e:
-            print(f"Error controlling lights: {e}")
-            # try again
-            turn_on_set_light(target_color, count+1)
+    # Helper function to turn_on_set_light
+    def turn_on_set_light(target_color):
+        """Helper function for backwards compatibility"""
+        rgbww_color = target_color + [255, 255]
+        light_controller.set_light_color(target_color, 100, rgbww_values=[255, 255])
 
     # Set initial LED color to red
     try:
         print("Turning on the light...")
-        turn_on_light()
+        light_controller.turn_on_light()
         time.sleep(5)
         print("Turning off the light...")
-        turn_off_light()
+        light_controller.turn_off_light()
     except Exception as e:
         print(f"Error controlling lights: {e}")
 
@@ -121,9 +74,9 @@ try:
 
     while True:
         # Check if the TV is off
-        if not is_tv_on():
+        if not light_controller.is_tv_on():
             print("Samsung TV is off. Pausing the script...")
-            turn_off_light()
+            light_controller.turn_off_light()
             time.sleep(1)  # Wait 5 seconds before checking again
             continue  # Skip to the next iteration if the TV is off
 
